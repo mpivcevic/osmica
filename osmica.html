@@ -569,7 +569,7 @@ details[open] .hours-chevron::before{content:'▴';}
 <div id="screen-login" class="screen">
   <div class="login-logo"><svg class="brand-mark" aria-hidden="true" focusable="false"><use href="#logo-mark"/></svg><span>Osmica</span></div>
   <p class="login-tagline">Tvoje smjene, tvoja pravila.</p>
-  <p style="font-size:10px;color:var(--text-3);margin-top:-24px;margin-bottom:clamp(14px,2.5dvh,24px);">v4.39</p>
+  <p style="font-size:10px;color:var(--text-3);margin-top:-24px;margin-bottom:clamp(14px,2.5dvh,24px);">v4.40</p>
   <!-- waiter session: show name + PIN keypad -->
   <div id="login-waiter-section" style="display:none;width:100%;flex-direction:column;align-items:center;">
     <div class="login-name-display">
@@ -1299,6 +1299,10 @@ function mapWaiter(row) {
     vacations: row.vacations || [],
     invite_token: row.invite_token,
     joined: !!row.joined_at,
+    // 017 / C3b. Present only on the owner path — owner_list_waiters() computes
+    // it. The waiter path selects WAITER_COLS off the table, which has no such
+    // column, so this reads false there and nothing renders it.
+    linked: !!row.linked,
   };
 }
 
@@ -1587,17 +1591,27 @@ async function handlePinOnlyKey(k) {
 // then attaches that uid to the waiter row and burns the invite token, so a
 // forwarded link is inert from that moment on.
 //
-// Every failure path here is non-fatal by design. This build changes no
-// user-visible behaviour: the PIN login path is untouched and still works, so an
-// unlinked waiter is inconvenienced (they can be re-invited), never locked out.
-// Stage C3 is where the identity starts being load-bearing, and it must not
-// begin until every waiter shows a non-null auth_user_id.
+// Every failure path here is still non-fatal — the PIN login path is untouched
+// until C3e, so an unlinked waiter is inconvenienced rather than locked out —
+// but v4.40 stops failing silently. C3c: this returns a reason instead of a
+// boolean, and the caller puts it on screen. Five different failures used to
+// collapse into `false` and a console.warn, and nobody reads a console.
+//
+//   'ok'               linked just now
+//   'already_linked'   this browser's uid is bound TO THIS WAITER — benign
+//   'linked_elsewhere' this browser's uid is bound to somebody else. Not
+//                      benign: the row this invite names stays unlinked
+//   'owner_session'    a real (non-anonymous) session is present, left alone
+//   'no_session'       anonymous sign-in failed, twice
+//   'invalid_token'    dead link, or the waiter row is already bound to another
+//                      device — 014 does not distinguish those (README trap 13)
+//   'error'            anything else
 //
 // If this silently does nothing, the usual cause is Authentication -> Providers
 // -> Anonymous sign-ins being disabled on that Supabase project. Check the
 // column, not the app.
-async function linkWaiterIdentity(token) {
-  if (!token) return false;
+async function linkWaiterIdentity(token, expectedWaiterId) {
+  if (!token) return 'error';
   try {
     // Never disturb an existing real session. On a waiter's own phone there is
     // none; on the builder's laptop the owner may be signed in, and replacing
@@ -1605,30 +1619,69 @@ async function linkWaiterIdentity(token) {
     const { data: { session: existing } } = await sb.auth.getSession();
     if (existing && !existing.user.is_anonymous) {
       console.warn('[Osmica] Owner session present — skipping waiter identity linking.');
-      return false;
+      return 'owner_session';
     }
 
     if (!existing) {
-      const { error: signInError } = await sb.auth.signInAnonymously();
+      // One retry. A cold sign-in on café wifi fails often enough that giving up
+      // on the first attempt would leave waiters unlinked for no better reason
+      // than a dropped packet — and after C4 that is a locked-out waiter.
+      let { error: signInError } = await sb.auth.signInAnonymously();
       if (signInError) {
-        console.warn('[Osmica] Anonymous sign-in failed:', signInError.message);
-        return false;
+        console.warn('[Osmica] Anonymous sign-in failed, retrying:', signInError.message);
+        ({ error: signInError } = await sb.auth.signInAnonymously());
+      }
+      if (signInError) {
+        console.warn('[Osmica] Anonymous sign-in failed twice:', signInError.message);
+        return 'no_session';
       }
     }
 
     const { data: result, error } = await sb.rpc('link_waiter_to_auth', { p_token: token });
     if (error) {
       console.warn('[Osmica] link_waiter_to_auth failed:', error.message);
-      return false;
+      return 'error';
     }
-    if (result !== 'ok' && result !== 'already_linked') {
-      console.warn('[Osmica] link_waiter_to_auth returned:', result);
-      return false;
+    if (result === 'ok') return 'ok';
+    if (result === 'already_linked') {
+      // 'already_linked' means the CALLER's uid is bound somewhere (014:57-63),
+      // not that it is bound here. Ana Anić, 22 Aug: a second claim in the same
+      // browser returned already_linked, the client counted it as success, and
+      // the waiter that invite actually named stayed unlinked with nothing on
+      // screen to say so. Check whose row holds this uid before believing it.
+      const { data: { user } } = await sb.auth.getUser();
+      const { data: bound } = await sb.from('waiters')
+        .select('id').eq('auth_user_id', user && user.id).maybeSingle();
+      if (expectedWaiterId && bound && bound.id === expectedWaiterId) return 'already_linked';
+      console.warn('[Osmica] This browser is bound to a different waiter:', bound && bound.id);
+      return 'linked_elsewhere';
     }
-    return true;
+    console.warn('[Osmica] link_waiter_to_auth returned:', result);
+    return result === 'invalid_token' ? 'invalid_token' : 'error';
   } catch (e) {
     console.warn('[Osmica] Waiter identity linking threw:', e);
-    return false;
+    return 'error';
+  }
+}
+
+// C3c. The one place that turns a link outcome into something a person can act
+// on. Returns null when there is nothing to say — including 'owner_session',
+// which only happens on the builder's laptop with the owner signed in and is
+// not a waiter-facing failure.
+function linkFailureMessage(reason) {
+  switch (reason) {
+    case 'ok':
+    case 'already_linked':
+    case 'owner_session':
+      return null;
+    case 'invalid_token':
+      return 'Ova poveznica više ne vrijedi. Zatraži novu od vlasnika.';
+    case 'linked_elsewhere':
+      return 'Ovaj je preglednik već povezan s drugim članom tima. Otvori poveznicu u novom (privatnom) prozoru ili zatraži novu od vlasnika.';
+    case 'no_session':
+      return 'Povezivanje uređaja nije uspjelo. Provjeri internet pa otvori poveznicu ponovo.';
+    default:
+      return 'Povezivanje uređaja nije uspjelo. Zatraži novu poveznicu od vlasnika.';
   }
 }
 
@@ -1968,10 +2021,10 @@ async function handleInviteKey(k) {
     // untouched, so a waiter whose linking fails is not locked out, they just
     // have no auth.uid() yet and can be re-invited. Nothing depends on the
     // identity until C3.
-    await linkWaiterIdentity(_inviteToken);
+    const setupLinkMsg = linkFailureMessage(await linkWaiterIdentity(_inviteToken, _inviteWaiter.id));
     // Remove invite token from URL
     history.replaceState({}, '', location.pathname);
-    showToast('PIN postavljen! Dobrodošli 👋');
+    showToast(setupLinkMsg || 'PIN postavljen! Dobrodošli 👋', setupLinkMsg ? 7000 : undefined);
     proceedAfterWaiterAuth(session);
     return;
   }
@@ -2004,10 +2057,13 @@ async function handleInviteKey(k) {
       //
       // Does not help a waiter already bound to a device they no longer have —
       // link_waiter_to_auth requires auth_user_id IS NULL (014:71) and returns
-      // invalid_token otherwise. That needs an owner-facing unlink; see
-      // decision 2 in TaskList_2026-08-17.md.
-      await linkWaiterIdentity(_inviteToken);
+      // invalid_token otherwise. That is what 017's owner_unlink_waiter() and
+      // the 🔓 button in the admin panel are for.
+      // Both branches, always. v4.39 exists because this call lived in `setup`
+      // and not here; C3e's local PIN hash lands in both for the same reason.
+      const recoverLinkMsg = linkFailureMessage(await linkWaiterIdentity(_inviteToken, _inviteWaiter.id));
       history.replaceState({}, '', location.pathname);
+      if (recoverLinkMsg) showToast(recoverLinkMsg, 7000);
       proceedAfterWaiterAuth(session);
     } else {
       for (let i = 0; i < 4; i++) {
@@ -2065,11 +2121,33 @@ function shiftLabel(s) {
   if (s==='popodne') return 'III Popodne';
   return '📅 Cijeli dan';
 }
-function showToast(msg) {
+// v4.40: an optional duration. The default stays 2200ms; the link and
+// write-refused messages are full sentences that ask the waiter to do
+// something, and 2.2s is not long enough to read one, let alone act on it.
+let _toastTimer = null;
+function showToast(msg, ms) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2200);
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => t.classList.remove('show'), ms || 2200);
+}
+
+// C3d. A refused write and a broken app used to read identically on screen —
+// one "Greška. Pokušaj ponovo." served both. Since 015 the difference matters
+// and is diagnosable: 42501 carrying "row-level security" is the policy doing
+// its job against a device that never linked, while a bare 42501 means the
+// caller was `anon` and never reached a policy at all (README trap 12). Both
+// are the same fix for the waiter, and neither of them is "try again".
+const WRITE_REFUSED_MSG = 'Ovaj uređaj nije povezan s tvojim računom, pa ne može slati zahtjeve. Zatraži novu poveznicu od vlasnika.';
+function writeErrorMessage(error) {
+  const code = error && error.code;
+  const msg = (error && error.message) || '';
+  if (code === '42501' || /row-level security/i.test(msg)) {
+    console.warn('[Osmica] write refused:', code, msg);
+    return WRITE_REFUSED_MSG;
+  }
+  return 'Greška. Pokušaj ponovo.';
 }
 function waiterById(id) { return STATE.waiters.find(w=>w.id===id); }
 function isOwner() { return STATE.currentUser === 'owner'; }
@@ -2487,7 +2565,7 @@ async function submitRequest() {
     status: 'open',
   }).select().single();
   btn.disabled = false;
-  if (error) { showToast('Greška. Pokušaj ponovo.'); return; }
+  if (error) { showToast(writeErrorMessage(error), 6000); return; }
   STATE.requests.push(mapRequest(data));
 
   // Build WhatsApp message
@@ -2617,8 +2695,14 @@ async function coverRequest(rid) {
   const r = STATE.requests.find(x=>x.id===rid);
   if (!r) return;
   const w = currentWaiter();
-  const { error } = await sb.from('shift_requests').update({ covered_by: w.id, status: 'pending_approval' }).eq('id', rid);
-  if (error) { showToast('Greška. Pokušaj ponovo.'); return; }
+  // .select() is not cosmetic. README trap 8: an UPDATE whose row the policy
+  // filters away comes back 204 with no error, so without it a refusal and a
+  // success are indistinguishable — and the app renders a swap the database
+  // never recorded.
+  const { data: updated, error } = await sb.from('shift_requests')
+    .update({ covered_by: w.id, status: 'pending_approval' }).eq('id', rid).select('id');
+  if (error) { showToast(writeErrorMessage(error), 6000); return; }
+  if (!updated || !updated.length) { showToast(WRITE_REFUSED_MSG, 6000); return; }
   r.coveredBy = w.id;
   r.status = 'pending_approval';
 
@@ -2660,8 +2744,13 @@ async function handleApproval(rid, action) {
     updates = {status:'rejected'};
     newStatus = 'rejected'; toast = 'Zahtjev odbijen';
   }
-  const { error } = await sb.from('shift_requests').update(updates).eq('id', rid);
-  if (error) { showToast('Greška. Pokušaj ponovo.'); return; }
+  // Same trap 8 reasoning as coverRequest. This path is the owner's, so a
+  // filtered row means the request belongs to another cafe rather than an
+  // unlinked device — but silence is the wrong answer either way.
+  const { data: approved, error } = await sb.from('shift_requests')
+    .update(updates).eq('id', rid).select('id');
+  if (error) { showToast(writeErrorMessage(error), 6000); return; }
+  if (!approved || !approved.length) { showToast('Zahtjev nije ažuriran. Osvježi stranicu pa pokušaj ponovo.', 6000); return; }
   r.status = newStatus;
   if (action === 'approve' || action === 'approve-direct') r.approvedBy = 'owner';
   showToast(toast);
@@ -2862,10 +2951,17 @@ function renderAdminStaff() {
         <div class="admin-row-sub">
           ${w.phone?w.phone+' · ':''}
           <span class="join-badge ${w.joined?'active':'pending'}">${w.joined?'Aktivan/na':'Čeka aktivaciju'}</span>
+          <!-- C3b. Two states, two different fixes. "Aktivan/na" is joined_at:
+               this person once chose a PIN, and it is never cleared. "Uređaj
+               povezan" is auth_user_id: this person can actually write. Before
+               017 the panel showed only the first, so a waiter who could not
+               raise a swap request looked identical to one who could. -->
+          <span class="join-badge ${w.linked?'active':'pending'}" title="${w.linked?'Ima povezan uređaj — može slati zahtjeve za zamjenu.':'Bez povezanog uređaja — može samo gledati raspored. Pošalji novu poveznicu.'}">${w.linked?'Uređaj povezan':'Bez uređaja'}</span>
         </div>
       </div>
       <div class="admin-row-actions">
         <button class="btn-icon" data-wid="${w.id}" data-action="invite" title="Pozivnica">🔗</button>
+        ${w.linked?`<button class="btn-icon" data-wid="${w.id}" data-action="unlink" title="Odveži uređaj">🔓</button>`:''}
         <button class="btn-icon" data-wid="${w.id}" data-action="edit">✏️</button>
         <button class="btn-icon danger" data-wid="${w.id}" data-action="delete">🗑️</button>
       </div>
@@ -2874,6 +2970,7 @@ function renderAdminStaff() {
     btn.addEventListener('click', () => {
       const wid = btn.dataset.wid, action = btn.dataset.action;
       if (action==='invite') showInviteForWaiter(wid);
+      if (action==='unlink') unlinkWaiter(wid);
       if (action==='edit') openWaiterModal(wid);
       if (action==='delete') deleteWaiter(wid);
     });
@@ -2905,6 +3002,54 @@ function showInviteForWaiter(wid) {
     navigator.clipboard.writeText(url).then(() => showToast('Link kopiran ✓')).catch(() => showToast('Kopiraj ručno: '+url));
   });
   document.getElementById('close-invite-modal').addEventListener('click', () => document.body.removeChild(modal));
+}
+
+// C3a's client half, and the reason C3 has a gate at all. A waiter who clears
+// their browser loses the session; after C4 there is no PIN path left to rescue
+// them, and a fresh invite cannot bind because link_waiter_to_auth requires
+// auth_user_id IS NULL (014:71). This releases the binding so a new device can
+// claim the row.
+//
+// Confirm first: it logs the waiter out of a device they may still be holding,
+// and there is no undo — the old invite link dies with the binding.
+function unlinkWaiter(wid) {
+  const w = waiterById(wid);
+  if (!w) return;
+  const first = w.name.split(' ')[0];
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay open';
+  modal.innerHTML = `<div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Odveži uređaj — ${first}</div>
+    <div class="modal-sub">${first} će biti odjavljen/a s uređaja, a stara poveznica prestaje vrijediti. Odmah dobiješ novu za slanje.</div>
+    <button class="btn-primary" id="unlink-confirm-btn">Odveži uređaj</button>
+    <button class="btn-secondary" id="unlink-cancel-btn" style="margin-top:8px;">Odustani</button>
+  </div>`;
+  document.body.appendChild(modal);
+  const close = () => { if (modal.parentNode) document.body.removeChild(modal); };
+  document.getElementById('unlink-cancel-btn').addEventListener('click', close);
+  document.getElementById('unlink-confirm-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('unlink-confirm-btn');
+    btn.disabled = true;
+    const { data: newToken, error } = await sb.rpc('owner_unlink_waiter', { p_waiter_id: wid });
+    if (error || !newToken) {
+      btn.disabled = false;
+      console.warn('[Osmica] owner_unlink_waiter failed:', error && error.message);
+      showToast('Odvezivanje nije uspjelo. Pokušaj ponovo.');
+      return;
+    }
+    // 017 clears joined_at and pin_hash along with the binding, so the local
+    // model has to lose them too. Leave `joined` true here and the row still
+    // reads "Aktivan/na" while the database disagrees — and the next invite
+    // would be sent expecting a recovery rather than a fresh PIN setup.
+    w.invite_token = newToken;
+    w.joined = false;
+    w.linked = false;
+    close();
+    renderAdminStaff();
+    showToast('Uređaj odvezan. Pošalji novu poveznicu.', 4000);
+    showInviteForWaiter(wid);
+  });
 }
 
 async function deleteWaiter(wid) {

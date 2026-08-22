@@ -10,8 +10,8 @@ commit message.
 **One shared counter across both databases. Never reuse a number.**
 
 The next migration takes the next free number regardless of which project it
-targets. As of 22 Aug 2026 the high-water mark is `dev/016`, so the next file —
-production or dev — is `017`.
+targets. As of 22 Aug 2026 the high-water mark is `017`, so the next file —
+production or dev — is `018`.
 
 Production's sequence will therefore have gaps. That is expected: a gap means
 that number went to dev.
@@ -57,6 +57,7 @@ SQL editor's success message.
 | 011 | revoke residual privileges | ✅ applied 17 Aug — mark_invite_joined confirmed gone on both |
 | 014 | Stage C1: waiter identity (`auth_user_id`, `link_waiter_to_auth`) | ✅ applied 18 Aug — **both projects**; six production rows verified `auth_user_id` null |
 | 015 | scope the `authenticated` role: RLS + column grants | ✅ applied 19 Aug — **both projects**, alongside the v4.38 deploy |
+| 017 | Stage C3a+C3b: `owner_unlink_waiter`, `linked` in `owner_list_waiters` | ⏳ **written, not applied** — goes to **both**; see `TaskList_2026-08-22.md` steps 2 and 6 |
 
 ### `migrations/dev/` — osmica-dev (`simavghwjnqytcyeunto`)
 
@@ -73,7 +74,8 @@ not dev-specific, so they get no dev-numbered file. **`003` was never run on
 dev**; `dev/016` replays it instead, and is the file to read for why the
 divergence was deliberate and why it stopped being defensible.
 
-High-water mark is now `016`. The next file, either project, is `017`.
+High-water mark is now `017` — it targets both projects and therefore gets no
+`dev/` twin. The next file, either project, is `018`.
 
 ## Two files that are kept on purpose despite never being run
 
@@ -156,7 +158,12 @@ Both are more useful as worked examples than they would be deleted.
    correctly-enforced policy and for a broken app. Distinguish them by the
    status: 403 `new row violates row-level security policy` is the policy
    working, 401 `42501` means the caller was `anon` and never reached it.
-13. **`already_linked` and "this waiter is already linked" are different
+13. **`CREATE OR REPLACE` cannot change a `RETURNS TABLE` signature.** Adding a
+   column to a set-returning function fails with "cannot change return type of
+   existing function" — it needs `DROP FUNCTION` then `CREATE`, and the grants
+   re-issued afterwards, because dropping takes them with it. Do both inside one
+   transaction so no caller ever sees the function missing. See `017`.
+14. **`already_linked` and "this waiter is already linked" are different
    things.** `link_waiter_to_auth` returns `already_linked` only when the
    *caller's* uid is bound (`014:57-63`). A waiter whose row is bound, arriving
    from a new browser, returns `invalid_token` instead — and the client counts

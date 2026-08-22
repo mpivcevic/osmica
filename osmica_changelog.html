@@ -1297,6 +1297,27 @@
       body: "A staff member on the live site completed an invite, was recognised as themselves rather than as an anonymous visitor, and raised a swap request — the first time anyone but the owner has written to the live database since mid-August, when the old anonymous write access was removed. Covering a colleague's shift was verified the same way on the test environment. The access rules were then listed by name on the live database and match the test environment exactly, rather than being assumed to match because the app behaved. What is left of the security work is the last open item — anyone can still read the staff list, colours, shift patterns and schedules without logging in — plus moving PIN checking onto the device and deleting the old login functions, neither of which changes what the app does.",
       why: "Worth recording that every check until now had been of the refusing kind: the wrong person cannot write. Refusals are weak evidence on their own, because a rule that refuses everybody looks identical to a rule that works. Only a recognised staff member successfully writing separates the two, and that had never been tried on the live app. It is also why the remaining work is sequenced the way it is: the login shortcut has to move to the device before the old login functions can be deleted, and the last read restrictions cannot land until those functions are gone, because a visitor who has not logged in still has to see the cafe before they can.",
       date: "22 Aug 2026"
+    },
+    {
+      id: "build-4-40-owner-unlink",
+      phase: "build",
+      version: "Build 4.40",
+      versionDate: "22 Aug 2026",
+      tag: "fix",
+      title: "The owner can release a staff member's device and send a fresh invitation",
+      body: "Until now, once a staff member's phone was tied to their account, nothing could untie it. A lost or wiped phone left the account claimed by a device nobody had, and a new invitation would not attach to it. The owner now has a button on each staff row that releases the device and hands back a new invitation link on the spot, ready to send. The old link stops working the moment the button is used, and the person sets a fresh PIN on their new phone as if joining for the first time.",
+      why: "This is not a convenience — it is the thing that has to exist before the next change is safe to make. The plan is to stop checking PINs over the network and check them on the phone instead, and then delete the old login route entirely. After that, a wiped phone would leave someone permanently locked out with no way back, for the owner or for us. Building the way back first, and proving it works end to end, is the only order in which the rest can be done without risking somebody's access to their own schedule.",
+      date: "22 Aug 2026"
+    },
+    {
+      id: "build-4-40-visible-states",
+      phase: "build",
+      version: "Build 4.40",
+      tag: "ui",
+      title: "The staff list stops hiding who can actually use the app",
+      body: "A staff row used to show one state: whether that person had ever set a PIN. It never showed whether their phone is actually tied to their account, which is what decides whether they can request a swap or only look at the roster. Those two states can disagree, and when they did the app looked completely normal while the person quietly could not do anything. Every row now shows both. Alongside it, three screens that used to say only 'Error. Try again.' now say what actually happened — an expired invitation link, a link opened in a browser that already belongs to a colleague, or a phone that is not tied to the account yet — each with the step that fixes it.",
+      why: "On 22 August five test staff members showed as active and not one of them could raise a swap request. Nothing on screen said so, in either the owner's view or theirs. A refusal that reads identically to a bug is worse than a refusal, because the first thing anyone does is retry, and the second is assume the app is broken. Both halves of this — showing the real state, and naming the real failure — exist so the same afternoon does not repeat itself when the app is carrying real staff.",
+      date: "22 Aug 2026"
     }
   ];
   </script>

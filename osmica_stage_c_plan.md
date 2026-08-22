@@ -135,6 +135,13 @@ past their first PIN could not be linked through the UI at all.
 
 ---
 
+> **Built 22 Aug 2026 — C3a, C3b, C3c and C3d ship as migration `017` and
+> client v4.40, committed on `main`.** Not pushed, and nothing has
+> been applied to a database yet.
+> `TaskList_2026-08-22.md` drives applying and verifying them, and its step 4 is
+> the round trip the rest of C3 is gated on. C3e and C3f stay unwritten until
+> that step passes — see that file for why.
+
 #### C3a — Owner unlink-and-reissue 🔴 SAFETY GATE, do this first
 
 **Why it is a gate, not a feature.** Today a waiter who clears their browser
