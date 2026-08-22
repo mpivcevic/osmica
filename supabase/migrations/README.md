@@ -172,11 +172,34 @@ Both are more useful as worked examples than they would be deleted.
 
 ## Verifying anything
 
-Never trust a green "Success". Re-probe with the publishable key and no session:
+Never trust a green "Success". Re-probe from outside, with the publishable key
+and no session — the SQL editor answers as a superuser and so cannot tell you
+what a stranger can reach.
+
+```bash
+# dev. For production swap in the two values from osmica.html:1113-1114.
+BASE='https://simavghwjnqytcyeunto.supabase.co'
+KEY='sb_publishable_xOx4POsl9coB1utDMHlHAw_h1q4oxWA'
+for q in 'name,color' 'phone' 'invite_token' '*'; do
+  printf '%-14s ' "$q"
+  curl -s -o /dev/null -w '%{http_code}\n' "$BASE/rest/v1/waiters?select=$q" -H "apikey: $KEY"
+done
+```
+
+Expected, and **identical on both projects**:
 
 ```
-?select=name,color   -> 200      ?select=phone        -> 401
-?select=invite_token -> 401      ?select=*            -> 401
+name,color     200
+phone          401
+invite_token   401
+*              401
 ```
 
-Dev and production should answer identically to all four.
+`200` on any of the last three means a column grant did not take. `401` on the
+first means the safe columns were revoked too far and the login screen is
+broken.
+
+To probe an RPC rather than a table, POST to `/rest/v1/rpc/<name>` with a body
+of arguments — `TaskList_2026-08-22.md` step 2 has a worked example, including
+the failure that looks like a pass: an error raised *inside* a function proves
+the caller reached it, which is the opposite of what these probes want to see.
