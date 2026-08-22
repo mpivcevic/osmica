@@ -57,7 +57,7 @@ SQL editor's success message.
 | 011 | revoke residual privileges | ✅ applied 17 Aug — mark_invite_joined confirmed gone on both |
 | 014 | Stage C1: waiter identity (`auth_user_id`, `link_waiter_to_auth`) | ✅ applied 18 Aug — **both projects**; six production rows verified `auth_user_id` null |
 | 015 | scope the `authenticated` role: RLS + column grants | ✅ applied 19 Aug — **both projects**, alongside the v4.38 deploy |
-| 017 | Stage C3a+C3b: `owner_unlink_waiter`, `linked` in `owner_list_waiters` | ⏳ **written, not applied** — goes to **both**; see `TaskList_2026-08-22.md` steps 2 and 6 |
+| 017 | Stage C3a+C3b: `owner_unlink_waiter`, `linked` in `owner_list_waiters` | ✅ applied — **both projects**, dev 22 Aug and production 23 Aug. Signature confirmed to end in `linked boolean` on both, and `owner_unlink_waiter` probed `401` `42501` from outside |
 
 ### `migrations/dev/` — osmica-dev (`simavghwjnqytcyeunto`)
 

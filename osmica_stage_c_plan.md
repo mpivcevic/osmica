@@ -135,12 +135,14 @@ past their first PIN could not be linked through the UI at all.
 
 ---
 
-> **Built 22 Aug 2026 — C3a, C3b, C3c and C3d ship as migration `017` and
-> client v4.40, committed on `main`.** Not pushed, and nothing has
-> been applied to a database yet.
-> `TaskList_2026-08-22.md` drives applying and verifying them, and its step 4 is
-> the round trip the rest of C3 is gated on. C3e and C3f stay unwritten until
-> that step passes — see that file for why.
+> ✅ **Done 23 Aug 2026 — C3a, C3b, C3c and C3d are live on both projects** as
+> migration `017` and client v4.40. `TaskList_2026-08-22.md` is the record.
+>
+> Two things it leaves for C3e. The re-invite after an unlink lands on the
+> **`setup`** branch, so the recovery route never exercises `recover` — write the
+> local hash in both branches and test `recover` deliberately. And production
+> carries one waiter who is `activated` but not `linked`, which C4 must not run
+> over.
 
 #### C3a — Owner unlink-and-reissue 🔴 SAFETY GATE, do this first
 

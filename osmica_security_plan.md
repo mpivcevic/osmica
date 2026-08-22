@@ -7,8 +7,8 @@
 > still true. Stages A, B and C1-C2 are complete and verified on both projects.
 >
 > For current state, in this order:
-> 1. `TaskList_2026-08-22.md` — C3 part 1, the safety gate. Written 22 Aug,
->    waiting to be applied
+> 1. `TaskList_2026-08-22.md` — C3 part 1, the safety gate. Closed 23 Aug;
+>    `017` and v4.40 are live on both projects
 > 2. `TaskList_2026-08-17.md` — the Stage C1–C2 record, closed 22 Aug 2026
 > 3. `osmica_stage_c_plan.md` — the C3/C4 design; C3e and C4 are not yet built
 > 4. `supabase/migrations/README.md` — what is applied where, and the trap list
