@@ -2209,8 +2209,13 @@ function closeOnboarding() { document.getElementById('ob-overlay').classList.rem
 // ══════════════════════════════════════════════════════════
 // TABS
 // ══════════════════════════════════════════════════════════
+// Every pane that exists, regardless of whether its button is currently shown.
+// getVisibleTabOrder() answers "what can you swipe between"; this answers "what
+// might be on screen", and switchTab needs the second to hide things.
+const ALL_TABS = ['home','swaps','week','month','admin'];
+
 function getVisibleTabOrder() {
-  return ['home','swaps','week','month','admin'].filter(t => {
+  return ALL_TABS.filter(t => {
     const btn = document.querySelector(`.tab-btn[data-tab="${t}"]`);
     return btn && btn.style.display !== 'none';
   });
@@ -2223,8 +2228,15 @@ function switchTab(tab, dir) {
     localStorage.setItem('zm_b_last_seen', new Date().toISOString());
   }
   STATE.activeTab = tab;
-  order.forEach(t => {
+  // ALL_TABS, not `order`. A tab whose button is hidden drops out of `order`
+  // while its pane keeps whatever display it was left with — so an owner who
+  // logs out and lets a waiter log in without a page refresh kept the admin
+  // pane rendered underneath the waiter's home screen, two headers and two
+  // scrollbars. `month` can do the same. Iterating every pane means the active
+  // one is shown and every other one is hidden, whether or not it is reachable.
+  ALL_TABS.forEach(t => {
     const el = document.getElementById(`tab-${t}`);
+    if (!el) return;
     if (t === tab) { el.style.display = 'flex'; el.style.flex = '1'; }
     else { el.style.display = 'none'; el.style.flex = ''; }
   });
@@ -2961,7 +2973,9 @@ function renderAdminStaff() {
       </div>
       <div class="admin-row-actions">
         <button class="btn-icon" data-wid="${w.id}" data-action="invite" title="Pozivnica">🔗</button>
-        ${w.linked?`<button class="btn-icon" data-wid="${w.id}" data-action="unlink" title="Odveži uređaj">🔓</button>`:''}
+        ${w.linked || w.joined
+          ? `<button class="btn-icon" data-wid="${w.id}" data-action="unlink" title="${w.linked?'Odveži uređaj':'Poništi PIN i pošalji novu poveznicu'}">${w.linked?'🔓':'🔑'}</button>`
+          : ''}
         <button class="btn-icon" data-wid="${w.id}" data-action="edit">✏️</button>
         <button class="btn-icon danger" data-wid="${w.id}" data-action="delete">🗑️</button>
       </div>
@@ -3016,13 +3030,27 @@ function unlinkWaiter(wid) {
   const w = waiterById(wid);
   if (!w) return;
   const first = w.name.split(' ')[0];
+  // Two situations, one function. owner_unlink_waiter() clears auth_user_id,
+  // joined_at and pin_hash and rotates the token in every case; what differs is
+  // which of those the owner is actually trying to undo.
+  //
+  //   linked            a device holds this account — release it
+  //   joined, unlinked  a PIN exists and no device holds anything. Before v4.41
+  //                     this row had no reset action at all, which is the worst
+  //                     case to hide it from: after C4 an activated-but-unlinked
+  //                     waiter cannot get in, and this button is the only fix.
+  const title = w.linked ? `Odveži uređaj — ${first}` : `Poništi PIN — ${first}`;
+  const sub = w.linked
+    ? `${first} će biti odjavljen/a s uređaja, a stara poveznica prestaje vrijediti. Odmah dobiješ novu za slanje.`
+    : `${first} postavlja novi PIN preko nove poveznice. Stara poveznica i stari PIN prestaju vrijediti.`;
+  const confirmLabel = w.linked ? 'Odveži uređaj' : 'Poništi PIN';
   const modal = document.createElement('div');
   modal.className = 'modal-overlay open';
   modal.innerHTML = `<div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">Odveži uređaj — ${first}</div>
-    <div class="modal-sub">${first} će biti odjavljen/a s uređaja, a stara poveznica prestaje vrijediti. Odmah dobiješ novu za slanje.</div>
-    <button class="btn-primary" id="unlink-confirm-btn">Odveži uređaj</button>
+    <div class="modal-title">${title}</div>
+    <div class="modal-sub">${sub}</div>
+    <button class="btn-primary" id="unlink-confirm-btn">${confirmLabel}</button>
     <button class="btn-secondary" id="unlink-cancel-btn" style="margin-top:8px;">Odustani</button>
   </div>`;
   document.body.appendChild(modal);
@@ -3031,11 +3059,12 @@ function unlinkWaiter(wid) {
   document.getElementById('unlink-confirm-btn').addEventListener('click', async () => {
     const btn = document.getElementById('unlink-confirm-btn');
     btn.disabled = true;
+    const wasLinked = w.linked;
     const { data: newToken, error } = await sb.rpc('owner_unlink_waiter', { p_waiter_id: wid });
     if (error || !newToken) {
       btn.disabled = false;
       console.warn('[Osmica] owner_unlink_waiter failed:', error && error.message);
-      showToast('Odvezivanje nije uspjelo. Pokušaj ponovo.');
+      showToast(wasLinked ? 'Odvezivanje nije uspjelo. Pokušaj ponovo.' : 'Poništavanje PIN-a nije uspjelo. Pokušaj ponovo.');
       return;
     }
     // 017 clears joined_at and pin_hash along with the binding, so the local
@@ -3047,7 +3076,7 @@ function unlinkWaiter(wid) {
     w.linked = false;
     close();
     renderAdminStaff();
-    showToast('Uređaj odvezan. Pošalji novu poveznicu.', 4000);
+    showToast(wasLinked ? 'Uređaj odvezan. Pošalji novu poveznicu.' : 'PIN poništen. Pošalji novu poveznicu.', 4000);
     showInviteForWaiter(wid);
   });
 }
