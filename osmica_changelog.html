@@ -1349,6 +1349,47 @@
       body: "A developer-only panel, invisible on the live site, gained three lines: whether this browser holds a staff session, an owner session, or none at all, and which staff member it belongs to. The app's screen and the browser's actual sign-in can disagree — the app can show one person while the database sees another, or nobody — and until now nothing displayed the second half.",
       why: "Two of yesterday's verification checks passed for the wrong reason because of exactly that. An owner sign-in was left over in the test window, which meant the step being tested was skipped entirely and a write that should have been refused was allowed on the owner's authority. Both looked like passes. Reading the browser's real identity previously needed a developer console and a cable to a laptop, which is not something anyone will do on a phone at six in the morning, so in practice it was never checked at all.",
       date: "23 Aug 2026"
+    },
+    {
+      id: "build-4-42-pin-on-device",
+      phase: "build",
+      version: "Build 4.42",
+      versionDate: "23 Aug 2026",
+      tag: "decision",
+      title: "Your PIN no longer leaves your phone",
+      body: "Until now, typing a PIN sent it to the database, which answered whether it was right — and, on one of the two login screens, answered which member of staff it belonged to. From this build the PIN is checked on the phone itself, against a scrambled copy stored there, and nothing is sent anywhere. Who you are no longer comes from the PIN at all: it comes from the account tied to your phone when you accepted your invitation. The practical effect for staff is almost nothing. You open the app, you type four digits, you are in — and it now works with no signal.",
+      why: "Four digits is ten thousand possibilities, which is not many for a computer. Worse, the screen that asked only for a PIN had to work out who you were from it, so it was capable of answering the question 'whose account did I just open' to anyone willing to try every combination from anywhere in the world. Limits were added in August to make that slow, but slow is a delay and not an answer. Moving the check onto the phone removes the question rather than rationing it. What protects the account becomes the phone in your pocket, which is a far better credential than four digits.",
+      date: "23 Aug 2026"
+    },
+    {
+      id: "build-4-42-one-way-in",
+      phase: "build",
+      version: "Build 4.42",
+      tag: "fix",
+      title: "One way into the app, and a refusal that explains itself",
+      body: "The invitation screen used to behave differently for a new starter and for someone who had used the app before, and the difference was decided by a flag that was never cleared once set. That split caused a real bug earlier this month, where every returning member of staff quietly ended up without a working account. Both routes are now one: the screen asks you to choose a PIN if this phone does not know one yet, and to type it if it does. Alongside it, an invitation that cannot connect your phone no longer lets you in anyway — it stops, and names which of the five reasons it was. Opening an invitation in a browser where the owner is signed in is now one of them.",
+      why: "The earlier bug was invisible in exactly the way that matters: the invitation opened, the PIN was accepted, the roster loaded, and the person simply could not do anything afterwards. Fixing it once was not enough, because the shape that produced it — two routes, one of which does something the other forgets — was still there. Removing the split is the only fix that cannot come back. And a half-finished sign-up that lets you into an app that will refuse everything you try is worse than being told to ask for a new link.",
+      date: "23 Aug 2026"
+    },
+    {
+      id: "build-4-42-everyone-resets-once",
+      phase: "build",
+      version: "Build 4.42",
+      tag: "ui",
+      title: "Everyone already using the app chooses a new PIN, once",
+      body: "The scrambled copy of a PIN that used to live on the server cannot be moved onto a phone — that is the point of the way it was stored. So the first time anyone who is already set up opens this build, the app asks them to choose a PIN for that phone rather than to type their old one. It takes two taps of four digits and does not happen again. The old PIN stops working at that moment, and the copy on the server is deleted shortly afterwards.",
+      why: "Worth stating plainly rather than letting people meet it cold, because on screen it looks like being asked to start over. It is not: the account, the roster and the schedule are untouched, and the phone is already recognised. Only the four digits are new. Anyone holding an unlocked phone at that moment can set them — which is the same as before, since that person could already open the app on it.",
+      date: "23 Aug 2026"
+    },
+    {
+      id: "c4-delete-old-login",
+      phase: "build",
+      version: "Build 4.42",
+      tag: "decision",
+      title: "The old login route is being deleted, not just switched off",
+      body: "With nothing calling them any more, the two functions that checked PINs over the network are removed from both databases, along with the attempt limiter that existed only to guard them and the stored PIN copies themselves. This is deliberately irreversible. It runs only after a full check that every member of staff who is still on the team has a phone connected to their account, and it refuses to run at all if anyone would be left without one — naming them rather than failing quietly.",
+      why: "Switching something off leaves it there to be switched back on by a later change nobody connects to this one. Deleting it ends the entire category: there is no longer a place to ask 'is this the right PIN', so there is nothing to guess, rate-limit, or leak. The reason it can be done safely now, and could not be in August, is that the owner gained a way to release a lost phone and hand out a fresh invitation — which was built first, on purpose, and proven end to end on the live app before anything was deleted.",
+      date: "23 Aug 2026"
     }
   ];
   </script>

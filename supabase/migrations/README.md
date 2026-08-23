@@ -10,8 +10,8 @@ commit message.
 **One shared counter across both databases. Never reuse a number.**
 
 The next migration takes the next free number regardless of which project it
-targets. As of 22 Aug 2026 the high-water mark is `017`, so the next file —
-production or dev — is `018`.
+targets. As of 23 Aug 2026 the high-water mark is `018`, so the next file —
+production or dev — is `019`.
 
 Production's sequence will therefore have gaps. That is expected: a gap means
 that number went to dev.
@@ -58,6 +58,7 @@ SQL editor's success message.
 | 014 | Stage C1: waiter identity (`auth_user_id`, `link_waiter_to_auth`) | ✅ applied 18 Aug — **both projects**; six production rows verified `auth_user_id` null |
 | 015 | scope the `authenticated` role: RLS + column grants | ✅ applied 19 Aug — **both projects**, alongside the v4.38 deploy |
 | 017 | Stage C3a+C3b: `owner_unlink_waiter`, `linked` in `owner_list_waiters` | ✅ applied — **both projects**, dev 22 Aug and production 23 Aug. Signature confirmed to end in `linked boolean` on both, and `owner_unlink_waiter` probed `401` `42501` from outside |
+| 018 | Stage C4: drop the PIN login surface | ⏳ **written, not applied.** Gated — see `TaskList_2026-08-23.md`. Requires **v4.42 deployed first** on the project being migrated, unlike `017`: a v4.41 client calls `set_waiter_pin_by_token` and `verify_waiter_pin` and stops working the moment they go |
 
 ### `migrations/dev/` — osmica-dev (`simavghwjnqytcyeunto`)
 
@@ -74,8 +75,8 @@ not dev-specific, so they get no dev-numbered file. **`003` was never run on
 dev**; `dev/016` replays it instead, and is the file to read for why the
 divergence was deliberate and why it stopped being defensible.
 
-High-water mark is now `017` — it targets both projects and therefore gets no
-`dev/` twin. The next file, either project, is `018`.
+High-water mark is now `018` — like `017` it targets both projects and
+therefore gets no `dev/` twin. The next file, either project, is `019`.
 
 ## Two files that are kept on purpose despite never being run
 
@@ -169,6 +170,19 @@ Both are more useful as worked examples than they would be deleted.
    from a new browser, returns `invalid_token` instead — and the client counts
    only `ok`/`already_linked` as success, so recovery fails with nothing but a
    console warning. Clearing `auth_user_id` is what makes a row claimable again.
+15. **Postgres does not check function bodies when you drop a column.**
+   `ALTER TABLE … DROP COLUMN pin_hash` succeeds with every `SECURITY DEFINER`
+   function that reads or writes that column still in place, still listed in
+   `pg_proc`, still passing any query you can write in the SQL editor — and
+   throwing `column "pin_hash" does not exist` the first time a person actually
+   calls one. `018` rewrites `owner_unlink_waiter` before dropping the column
+   for exactly this reason, and its step 5 is a button press rather than a
+   query, because a query cannot catch it.
+16. **"Permission denied" is not "does not exist".** When the goal is deleting
+   a function rather than fencing it, `401` with `42501` is a **failure** that
+   reads like the pass you have been trained by every earlier probe to expect.
+   `404` with `PGRST202` — PostgREST refusing to admit the function is in the
+   schema cache — is the only answer that proves a `DROP` landed.
 
 ## Verifying anything
 

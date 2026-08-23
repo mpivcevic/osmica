@@ -569,12 +569,16 @@ details[open] .hours-chevron::before{content:'▴';}
 <div id="screen-login" class="screen">
   <div class="login-logo"><svg class="brand-mark" aria-hidden="true" focusable="false"><use href="#logo-mark"/></svg><span>Osmica</span></div>
   <p class="login-tagline">Tvoje smjene, tvoja pravila.</p>
-  <p style="font-size:10px;color:var(--text-3);margin-top:-24px;margin-bottom:clamp(14px,2.5dvh,24px);">v4.41</p>
+  <p style="font-size:10px;color:var(--text-3);margin-top:-24px;margin-bottom:clamp(14px,2.5dvh,24px);">v4.42</p>
   <!-- waiter session: show name + PIN keypad -->
   <div id="login-waiter-section" style="display:none;width:100%;flex-direction:column;align-items:center;">
     <div class="login-name-display">
       <div class="login-name" id="login-name-display">&#8203;</div>
     </div>
+    <!-- v4.42: the keypad now has three modes (verify / set / confirm), because a
+         waiter linked before this build has a session and no local PIN yet. The
+         error line is red and cannot carry an instruction. -->
+    <p id="login-instruction" style="display:none;font-size:13px;color:var(--text-2);margin:-6px 0 12px;text-align:center;"></p>
     <div class="pin-dots" id="pin-dots">
       <div class="pin-dot" id="dot-0"></div>
       <div class="pin-dot" id="dot-1"></div>
@@ -1208,11 +1212,12 @@ function closeInstallModal() {
 
 let _pendingWaiterSession = null;
 
-// Shared exit point for every way a waiter can successfully authenticate:
-// invite-flow first-time PIN setup, invite-flow existing-PIN recovery, the
-// regular returning-device login (handleLoginKey), and PIN-only mode
-// (handlePinOnlyKey). Whichever one fires: show the install modal once per
-// device if needed, then the one-time app guide, then into the app.
+// Shared exit point for every way a waiter can successfully authenticate. Since
+// v4.42 there are three, not four: the invite screen setting a first PIN on this
+// device, the invite screen unlocking one this device already holds, and the
+// login keypad (handleLoginKey, which both sets and verifies). PIN-only mode is
+// gone with login_waiter_by_pin. Whichever fires: show the install modal once
+// per device if needed, then the one-time app guide, then into the app.
 function proceedAfterWaiterAuth(session) {
   _pendingWaiterSession = session;
   if (!isStandalonePWA() && !localStorage.getItem('zm_b_waiter_install_prompted')) {
@@ -1277,6 +1282,108 @@ function setWaiterSession(data) {
 }
 function clearWaiterSession() {
   localStorage.removeItem(WAITER_SESSION_KEY);
+}
+
+// ════════════════════════════════════════════════════════
+// LOCAL PIN — Stage C3e
+// ════════════════════════════════════════════════════════
+// The PIN stops being a network credential here. Until v4.41 every PIN entry
+// was a question to the database: login_waiter_by_pin(cafe, pin) answered
+// "which waiter is this", verify_waiter_pin(waiter, pin) answered yes or no.
+// Both are oracles — the first names a person to anyone willing to try 10,000
+// combinations — and migration 009's rate limiter exists only to make them
+// expensive. From v4.42 the PIN never leaves the device, and 018 deletes both
+// functions outright.
+//
+// Be honest about what this hash is. A 4-digit PIN is a 10,000-key space, so no
+// iteration count makes it resistant to someone who can read localStorage — and
+// someone who can read localStorage already holds the Supabase refresh token
+// sitting next to it, which is the credential that actually authenticates. The
+// hash is not protecting the account. It stops a colleague picking up an
+// unlocked phone and reading the roster as you, and that is the whole of its
+// job. What protects the account is possession of the device. See "Be honest
+// about what the PIN then is" in osmica_stage_c_plan.md.
+//
+// 210,000 iterations of PBKDF2-HMAC-SHA256 is OWASP's figure. On a slow phone
+// it costs a few hundred milliseconds, once per unlock.
+const PIN_KEY_PREFIX = 'zm_b_pin_';   // + waiter id; the zm_ prefix is what the dev panel's wipe clears
+const PIN_ITERATIONS = 210000;
+
+// crypto.subtle exists only in a secure context — https, or localhost. The live
+// site and the cloudflared tunnel are both https, but a plain-http LAN address
+// (http://192.168.x.x:5500) is not, and there every call below throws. Say which
+// it is, because the fix is the URL and nothing in the app.
+function pinCryptoAvailable() {
+  return typeof crypto !== 'undefined' && !!(crypto.subtle && crypto.getRandomValues);
+}
+const PIN_CRYPTO_MSG = 'Ovaj preglednik ne može sigurno spremiti PIN. Otvori aplikaciju preko https adrese.';
+
+function pinStoreKey(waiterId) { return PIN_KEY_PREFIX + waiterId; }
+function readLocalPin(waiterId) {
+  try { return JSON.parse(localStorage.getItem(pinStoreKey(waiterId))); } catch { return null; }
+}
+function hasLocalPin(waiterId) {
+  const rec = readLocalPin(waiterId);
+  return !!(rec && rec.hash && rec.salt);
+}
+function clearLocalPin(waiterId) { localStorage.removeItem(pinStoreKey(waiterId)); }
+
+const pinB64   = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes)));
+const pinUnB64 = (str)   => Uint8Array.from(atob(str), c => c.charCodeAt(0));
+
+async function derivePinHash(pin, saltBytes, iterations) {
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: saltBytes, iterations, hash: 'SHA-256' }, key, 256);
+  return pinB64(bits);
+}
+
+// Throws on a browser with no WebCrypto. Deliberately: the caller must not
+// write a session and walk the waiter into the app having stored nothing.
+async function setLocalPin(waiterId, pin) {
+  if (!pinCryptoAvailable()) throw new Error('no-subtle-crypto');
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const hash = await derivePinHash(pin, salt, PIN_ITERATIONS);
+  localStorage.setItem(pinStoreKey(waiterId), JSON.stringify({
+    v: 1, salt: pinB64(salt), iterations: PIN_ITERATIONS, hash,
+  }));
+}
+
+// Returns false rather than throwing on a missing or corrupt record: the
+// caller's next move is the same either way, and an unreadable record must
+// never be a way in.
+async function verifyLocalPin(waiterId, pin) {
+  const rec = readLocalPin(waiterId);
+  if (!rec || !rec.hash || !rec.salt || !pinCryptoAvailable()) return false;
+  try {
+    const hash = await derivePinHash(pin, pinUnB64(rec.salt), rec.iterations || PIN_ITERATIONS);
+    return hash === rec.hash;
+  } catch (_) { return false; }
+}
+
+// Who is this browser according to the DATABASE, rather than according to
+// localStorage? Since C3e that is the only version of the question that
+// matters: the JWT is what authorises every write, and the waiter session in
+// localStorage is display data that can be stale, wrong, or left behind by the
+// dev switcher. Needs the `authenticated` role — anon holds no grant on
+// auth_user_id (015) and the query would 401.
+// Returns {ok, waiter}. The two failures are NOT the same and must never be
+// collapsed: `ok:false` means the question could not be asked — offline, API
+// down, a 500 — while `ok:true, waiter:null` means it was asked and answered
+// "this uid is bound to nobody". The caller signs the session out on the
+// second, and a dropped packet must never be able to trigger that: releasing a
+// device binding is not something the client is allowed to do by accident, and
+// the way back from one is an owner unlink and a fresh invite.
+async function resolveWaiterBySession(uid) {
+  const { data, error } = await sb.from('waiters')
+    .select('id,cafe_id,name,color').eq('auth_user_id', uid).maybeSingle();
+  if (error) {
+    console.warn('[Osmica] waiter lookup by session failed:', error.message);
+    return { ok: false, waiter: null };
+  }
+  if (!data) return { ok: true, waiter: null };
+  return { ok: true, waiter: { id: data.id, name: data.name, cafe_id: data.cafe_id, color: data.color || AVATAR_COLORS[0] } };
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1419,24 +1526,72 @@ async function init() {
     return;
   }
 
-  // 3. Waiter session (localStorage)
-  const ws = getWaiterSession();
-  if (ws) {
+  // 3. Waiter identity — from the JWT, not from localStorage.
+  //
+  // Until v4.41 this read a waiter session out of localStorage and then asked
+  // the database to check a PIN. Both halves are gone. The anonymous session
+  // Supabase restored above IS the identity; the waiter row holding that uid is
+  // the answer to "who is this", and no PIN, café id or oracle is involved in
+  // getting it. The PIN is asked afterwards, locally, and only unlocks the app.
+  if (session && session.user.is_anonymous) {
+    const { ok, waiter } = await resolveWaiterBySession(session.user.id);
+    if (waiter) {
+      setWaiterSession(waiter);
+      localStorage.setItem('zm_b_cafe_id', waiter.cafe_id);
+      showScreen('screen-login');
+      setupWaiterLoginScreen(waiter);
+      return;
+    }
+    if (!ok) {
+      // The lookup failed rather than answered. getSession() reads local
+      // storage, so we got this far with no network at all — and a local PIN
+      // that stops working the moment the wifi does would defeat the point of
+      // moving it onto the device. Fall back to the last known identity and
+      // unlock locally. The app itself will still need the network to load the
+      // roster; what must not happen here is signing the session out.
+      const cached = getWaiterSession();
+      showScreen('screen-login');
+      if (cached) setupWaiterLoginScreen(cached);
+      else setupLoginNoSession('Nema veze s poslužiteljem.<br>Provjeri internet pa pokušaj ponovo.');
+      return;
+    }
+    // Asked and answered: a live anonymous session bound to no waiter row. The
+    // owner released this device (017), or the row was deleted. Drop the
+    // session rather than keep it — holding on to it means the next invite
+    // claimed in this browser returns already_linked and binds nobody, which is
+    // trap 14 and how Ana Anić stayed unlinked on 22 Aug with nothing on screen
+    // to say so.
+    await sb.auth.signOut();
+    clearWaiterSession();
     showScreen('screen-login');
-    setupWaiterLoginScreen(ws);
+    setupLoginNoSession('Ovaj uređaj više nije povezan s tvojim računom.<br>Zatraži novu poveznicu od vlasnika.');
     return;
   }
 
-  // 4. PIN-only mode — cafe known but no active session
-  if (localStorage.getItem('zm_b_cafe_id')) {
-    showScreen('screen-login');
-    setupPinOnlyScreen();
-    return;
-  }
-
-  // 5. Default: login screen (no-session mode)
+  // 4. No session at all. Since v4.42 there is no way to authenticate a waiter
+  // on this device without one: the PIN-only screen is gone, because the
+  // function behind it (login_waiter_by_pin) is the enumeration oracle C4
+  // deletes. An invite link is the only way in — which is the design, not a
+  // gap. The credential is the device, and the way to give a device the
+  // credential is to send it one.
+  //
+  // But say WHICH nothing this is. A device that has never been invited and a
+  // device whose session expired or was refused a refresh look identical from
+  // here, and "Nisi još aktiviran/a" is actively wrong for the second — it is
+  // the reading that sends a waiter to the owner asking to be added twice.
+  // The cached waiter object is what tells them apart, so it is deliberately
+  // NOT cleared here; it holds no authority now that the JWT is the credential,
+  // and it is the only evidence left that someone was once set up on this
+  // phone. The local PIN hash stays for the same reason: if the owner reissues
+  // to this same device, the invite screen can ask for the PIN it already knows
+  // instead of making them choose a new one.
+  const stranded = getWaiterSession();
   showScreen('screen-login');
-  setupLoginNoSession();
+  if (stranded) {
+    setupLoginNoSession('Prijava na ovom uređaju više ne vrijedi.<br>Provjeri internet; ako se ne riješi, zatraži novu poveznicu od vlasnika.');
+  } else {
+    setupLoginNoSession();
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1510,9 +1665,32 @@ let PIN_BUFFER = '';
 let _loginWaiterSession = null;
 let _loginVerifying = false;
 
+// Three modes, because a waiter arriving here may hold a session and no local
+// PIN yet:
+//
+//   'verify'   a hash exists on this device — compare against it
+//   'set'      no hash: first entry of a new PIN
+//   'confirm'  second entry, must match
+//
+// 'set' is not an edge case. Every waiter linked before v4.42 has a session and
+// no local hash, so the first time they open the app after this build they land
+// in 'set', not in 'verify'. Their old PIN lives in waiters.pin_hash, which
+// nothing reads any more and 018 deletes. C3f tests that path by name.
+let _loginMode = 'verify';
+let _loginPinFirst = '';
+
+function setLoginInstruction(text) {
+  const el = document.getElementById('login-instruction');
+  if (!el) return;
+  el.textContent = text || '';
+  el.style.display = text ? 'block' : 'none';
+}
+
 function setupWaiterLoginScreen(ws) {
   _loginWaiterSession = ws;
   PIN_BUFFER = '';
+  _loginPinFirst = '';
+  _loginMode = hasLocalPin(ws.id) ? 'verify' : 'set';
   document.getElementById('login-waiter-section').style.display = 'flex';
   document.getElementById('login-no-session-section').style.display = 'none';
   document.querySelector('.login-name-display').style.display = '';
@@ -1521,69 +1699,37 @@ function setupWaiterLoginScreen(ws) {
   nameEl.classList.add('visible');
   renderPinDots([]);
   document.getElementById('login-error').textContent = '';
+  setLoginInstruction(_loginMode === 'set' ? 'Postavi 4-znamenkasti PIN za ovaj uređaj.' : '');
   document.getElementById('keypad').querySelectorAll('.key[data-key]').forEach(btn => {
     btn.onclick = () => handleLoginKey(btn.dataset.key);
   });
 }
 
-function setupLoginNoSession() {
+// The message is a parameter now: "not activated yet" and "your device was
+// released" are different facts and lead to different next steps, and this
+// screen used to state the first one to everybody.
+function setupLoginNoSession(msg) {
   document.getElementById('login-waiter-section').style.display = 'none';
   document.getElementById('login-no-session-section').style.display = 'flex';
+  setLoginInstruction('');
+  const p = document.querySelector('#login-no-session-section .login-no-session p');
+  if (p) p.innerHTML = msg || 'Nisi još aktiviran/a.<br>Zatraži pozivnicu od vlasnika kafića.';
 }
 
-function setupPinOnlyScreen() {
-  _loginWaiterSession = null;
-  PIN_BUFFER = '';
-  document.getElementById('login-no-session-section').style.display = 'none';
-  document.getElementById('login-waiter-section').style.display = 'flex';
-  document.getElementById('login-name-display').textContent = '';
-  document.getElementById('login-name-display').classList.remove('visible');
-  document.querySelector('.login-name-display').style.display = 'none';
-  renderPinDots([]);
-  document.getElementById('login-error').textContent = '';
-  document.getElementById('keypad').querySelectorAll('.key[data-key]').forEach(btn => {
-    btn.onclick = () => handlePinOnlyKey(btn.dataset.key);
-  });
-}
+// v4.42 removed setupPinOnlyScreen()/handlePinOnlyKey() and pinFailureMessage().
+//
+// The first two were the café+PIN screen: type four digits with no session and
+// no name on screen, and login_waiter_by_pin(cafe_id, pin) answered with a
+// waiter row — which is to say it told anyone with the publishable key WHICH
+// person they had just become, in at most 10,000 tries. 009 rate-limited it;
+// C3e stops calling it and 018 drops it. There is no longer any way to become
+// a waiter on a device that was not sent an invite link.
+//
+// pinFailureMessage() asked is_pin_locked() after a failed attempt, because the
+// two oracles deliberately answered "wrong PIN" and "locked out" identically
+// and the waiter at the till still needed telling. A local comparison has
+// nothing to throttle, so both the lockout and the question are gone.
 
-let _pinOnlyVerifying = false;
-async function handlePinOnlyKey(k) {
-  if (_pinOnlyVerifying) return;
-  const err = document.getElementById('login-error');
-  err.textContent = '';
-  if (k === 'del') { PIN_BUFFER = PIN_BUFFER.slice(0, -1); renderPinDots(PIN_BUFFER); return; }
-  if (PIN_BUFFER.length >= 4) return;
-  PIN_BUFFER += k;
-  renderPinDots(PIN_BUFFER);
-  if (PIN_BUFFER.length < 4) return;
-  _pinOnlyVerifying = true;
-  const { data: rows } = await sb.rpc('login_waiter_by_pin', {
-    p_cafe_id: localStorage.getItem('zm_b_cafe_id'),
-    p_pin: PIN_BUFFER,
-  });
-  _pinOnlyVerifying = false;
-  const waiter = Array.isArray(rows) ? rows[0] : null;
-  if (waiter) {
-    const session = { id: waiter.id, name: waiter.name, cafe_id: waiter.cafe_id, color: waiter.color || AVATAR_COLORS[0] };
-    setWaiterSession(session);
-    proceedAfterWaiterAuth(session);
-  } else {
-    const dotsEl = document.getElementById('pin-dots');
-    for (let i = 0; i < 4; i++) { const d = document.getElementById(`dot-${i}`); if (d) d.classList.add('error'); }
-    dotsEl.classList.add('shake');
-    setTimeout(() => { dotsEl.classList.remove('shake'); PIN_BUFFER = ''; renderPinDots([]); }, 400);
-    err.textContent = await pinFailureMessage(localStorage.getItem('zm_b_cafe_id'), 'Pogrešan PIN. Pokušaj ponovo.');
-  }
-}
-
-// After a failed PIN attempt, ask separately whether the café's keypad is locked.
-// login_waiter_by_pin and verify_waiter_pin deliberately answer the same way for
-// "wrong PIN" and "locked out", so the login response never confirms to an
-// attacker that they have found the throttle. The waiter at the till still needs
-// telling, otherwise they keep retrying and keep extending the lockout — hence
-// this second, explicit question. Falls back to the plain message if
-// is_pin_locked is unavailable, so the app still works against a database that
-// has not had migration 009 applied.
 // Stage C1 — bind this browser to this waiter.
 //
 // signInAnonymously() mints a real Supabase user with a device-scoped refresh
@@ -1591,11 +1737,14 @@ async function handlePinOnlyKey(k) {
 // then attaches that uid to the waiter row and burns the invite token, so a
 // forwarded link is inert from that moment on.
 //
-// Every failure path here is still non-fatal — the PIN login path is untouched
-// until C3e, so an unlinked waiter is inconvenienced rather than locked out —
-// but v4.40 stops failing silently. C3c: this returns a reason instead of a
-// boolean, and the caller puts it on screen. Five different failures used to
-// collapse into `false` and a console.warn, and nobody reads a console.
+// v4.42 flips the contract: failure here is FATAL. Through C2 it was not —
+// the PIN login path still worked, so an unlinked waiter was read-only rather
+// than locked out, and the call was best-effort by design. C3e removed that
+// fallback. A waiter with a local PIN and no identity cannot write, cannot be
+// recognised on their next visit, and has no second route in; walking them past
+// the invite screen would hand them an app that looks finished and does
+// nothing. So the callers now refuse to store a PIN or start a session unless
+// this returns 'ok' or 'already_linked', and show the reason.
 //
 //   'ok'               linked just now
 //   'already_linked'   this browser's uid is bound TO THIS WAITER — benign
@@ -1665,15 +1814,22 @@ async function linkWaiterIdentity(token, expectedWaiterId) {
 }
 
 // C3c. The one place that turns a link outcome into something a person can act
-// on. Returns null when there is nothing to say — including 'owner_session',
-// which only happens on the builder's laptop with the owner signed in and is
-// not a waiter-facing failure.
+// on. Returns null only for the two outcomes that mean "this device now holds
+// this waiter's identity"; every other reason is a message, and since v4.42 a
+// message means the waiter does not get in.
+//
+// 'owner_session' moved out of the benign list in v4.42. It means linking was
+// skipped because a real login was already present in this browser, so no
+// waiter identity was established at all — and on 22 Aug that produced two
+// verification steps that passed for the wrong reason with nothing on screen.
+// Under C3e it would also leave the waiter with no session and no way to write.
 function linkFailureMessage(reason) {
   switch (reason) {
     case 'ok':
     case 'already_linked':
-    case 'owner_session':
       return null;
+    case 'owner_session':
+      return 'Na ovom je pregledniku prijavljen vlasnik. Odjavi se ili otvori poveznicu u privatnom (incognito) prozoru.';
     case 'invalid_token':
       return 'Ova poveznica više ne vrijedi. Zatraži novu od vlasnika.';
     case 'linked_elsewhere':
@@ -1685,15 +1841,6 @@ function linkFailureMessage(reason) {
   }
 }
 
-async function pinFailureMessage(cafeId, fallback) {
-  if (!cafeId) return fallback;
-  try {
-    const { data: locked } = await sb.rpc('is_pin_locked', { p_cafe_id: cafeId });
-    if (locked) return 'Previše pokušaja. Pričekaj minutu pa pokušaj ponovo.';
-  } catch (_) { /* treat as not locked */ }
-  return fallback;
-}
-
 function renderPinDots(dots) {
   const container = document.getElementById('pin-dots');
   if (!container) return;
@@ -1703,6 +1850,17 @@ function renderPinDots(dots) {
     d.classList.toggle('filled', i < dots.length);
     d.classList.remove('error');
   }
+}
+
+function failLoginPin(msg) {
+  const dotsEl = document.getElementById('pin-dots');
+  for (let i = 0; i < 4; i++) {
+    const d = document.getElementById(`dot-${i}`);
+    if (d) d.classList.add('error');
+  }
+  dotsEl.classList.add('shake');
+  setTimeout(() => { dotsEl.classList.remove('shake'); PIN_BUFFER = ''; renderPinDots([]); }, 400);
+  document.getElementById('login-error').textContent = msg;
 }
 
 async function handleLoginKey(k) {
@@ -1717,25 +1875,58 @@ async function handleLoginKey(k) {
   if (PIN_BUFFER.length >= 4) return;
   PIN_BUFFER += k;
   renderPinDots(PIN_BUFFER);
-  if (PIN_BUFFER.length === 4) {
-    _loginVerifying = true;
-    const { data: ok } = await sb.rpc('verify_waiter_pin', {
-      p_waiter_id: _loginWaiterSession.id,
-      p_pin: PIN_BUFFER,
-    });
-    _loginVerifying = false;
-    if (ok) {
-      proceedAfterWaiterAuth(_loginWaiterSession);
-    } else {
-      const dotsEl = document.getElementById('pin-dots');
-      for (let i = 0; i < 4; i++) {
-        const d = document.getElementById(`dot-${i}`);
-        if (d) d.classList.add('error');
-      }
-      dotsEl.classList.add('shake');
-      setTimeout(() => { dotsEl.classList.remove('shake'); PIN_BUFFER = ''; renderPinDots([]); }, 400);
-      err.textContent = await pinFailureMessage(_loginWaiterSession && _loginWaiterSession.cafe_id, 'Pogrešan PIN. Pokušaj ponovo.');
+  if (PIN_BUFFER.length < 4) return;
+
+  // First entry of a new PIN — this device has none stored yet.
+  if (_loginMode === 'set') {
+    _loginPinFirst = PIN_BUFFER;
+    PIN_BUFFER = '';
+    _loginMode = 'confirm';
+    setLoginInstruction('Potvrdi PIN.');
+    renderPinDots([]);
+    return;
+  }
+
+  if (_loginMode === 'confirm') {
+    if (PIN_BUFFER !== _loginPinFirst) {
+      _loginMode = 'set';
+      _loginPinFirst = '';
+      setLoginInstruction('Postavi 4-znamenkasti PIN za ovaj uređaj.');
+      failLoginPin('PINovi se ne podudaraju. Pokušaj ponovo.');
+      return;
     }
+    _loginVerifying = true;
+    try {
+      await setLocalPin(_loginWaiterSession.id, PIN_BUFFER);
+    } catch (_) {
+      _loginVerifying = false;
+      _loginMode = 'set';
+      _loginPinFirst = '';
+      failLoginPin(PIN_CRYPTO_MSG);
+      return;
+    }
+    _loginVerifying = false;
+    _loginMode = 'verify';
+    setLoginInstruction('');
+    proceedAfterWaiterAuth(_loginWaiterSession);
+    return;
+  }
+
+  // 'verify'. No network call: the hash is on this device and so is the answer.
+  _loginVerifying = true;
+  const ok = await verifyLocalPin(_loginWaiterSession.id, PIN_BUFFER);
+  _loginVerifying = false;
+  if (ok) {
+    proceedAfterWaiterAuth(_loginWaiterSession);
+  } else {
+    // No lockout and no throttle here, deliberately. 009 rate-limited the two
+    // RPCs because every guess was a question to the server, answerable from
+    // anywhere in the world with nothing but the publishable key. A local
+    // comparison is not that, and a counter kept in the same localStorage as
+    // the hash is removable by exactly the person it would be counting. The
+    // thing this PIN protects against is someone picking up an unlocked phone,
+    // and that person is not deterred by a counter they can see being kept.
+    failLoginPin('Pogrešan PIN. Pokušaj ponovo.');
   }
 }
 
@@ -1920,18 +2111,34 @@ async function handleInviteLoad(token) {
   document.getElementById('invite-cafe-name').textContent = waiter.cafe_name || '';
   document.getElementById('invite-content').style.display = 'block';
 
-  if (!waiter.joined_at) {
-    // New user — PIN setup
+  // v4.42 routes on what THIS BROWSER holds, not on waiter.joined_at.
+  //
+  // The old branch was `!waiter.joined_at`: new user sets a PIN, returning user
+  // types the old one and the server checks it. Two problems, both load-bearing.
+  // joined_at is never cleared except by 017, so the second branch is where
+  // every returning waiter landed forever — and it is the branch that, until
+  // v4.39, did not link. One call missing from one branch made every waiter past
+  // their first PIN unlinkable through the UI, invisibly, for days. v4.42
+  // removes the asymmetry instead of fixing it a second time: one path, and the
+  // only question is whether this device already knows a PIN for this person.
+  //
+  // Asking a returning waiter for their old PIN proved nothing anyway. The
+  // invite token is the credential in both branches, and link_waiter_to_auth
+  // refuses any row that is already bound (014:71) — so a link that reaches a
+  // claimable row is a link the owner issued for that row. After C3e the old PIN
+  // exists only as a hash on a device this waiter no longer has, which is
+  // usually the reason they are standing here.
+  if (hasLocalPin(waiter.id)) {
+    // This device already holds a PIN for this person — unlock, do not re-set.
+    _inviteStep = 'recover';
+    _invitePinBuf = '';
+    document.getElementById('invite-instruction').textContent = 'Upiši PIN za prijavu na ovom uređaju.';
+    document.getElementById('invite-confirm-label').style.display = 'none';
+  } else {
     _inviteStep = 'setup';
     _invitePinFirst = '';
     _invitePinBuf = '';
     document.getElementById('invite-instruction').textContent = 'Postavi 4-znamenkasti PIN za prijavu.';
-    document.getElementById('invite-confirm-label').style.display = 'none';
-  } else {
-    // Returning user on new device — verify existing PIN
-    _inviteStep = 'recover';
-    _invitePinBuf = '';
-    document.getElementById('invite-instruction').textContent = 'Upiši PIN za prijavu na ovom uređaju.';
     document.getElementById('invite-confirm-label').style.display = 'none';
   }
   renderInviteDots([]);
@@ -1987,17 +2194,6 @@ async function handleInviteKey(k) {
       renderInviteDots([]);
       return;
     }
-    // Set PIN
-    _inviteVerifying = true;
-    // PIN setup is keyed on the invite token: that token is the one credential a
-    // first-time waiter holds, and the function checks it server-side. It also
-    // marks the invite joined in the same statement, so mark_invite_joined is no
-    // longer a separate call — the PIN and the joined flag now land together.
-    const { data: pinResult, error } = await sb.rpc('set_waiter_pin_by_token', {
-      p_token: _inviteToken,
-      p_pin: _invitePinBuf,
-    });
-    _inviteVerifying = false;
     const restartPinSetup = (msg) => {
       err.textContent = msg;
       _invitePinBuf = ''; _invitePinFirst = ''; _inviteStep = 'setup';
@@ -2005,36 +2201,56 @@ async function handleInviteKey(k) {
       document.getElementById('invite-instruction').textContent = 'Postavi 4-znamenkasti PIN za prijavu.';
       renderInviteDots([]);
     };
-    if (error) { err.textContent = 'Greška. Pokušaj ponovo.'; _invitePinBuf = ''; renderInviteDots([]); return; }
-    if (pinResult === 'taken') { restartPinSetup('Ovaj PIN je već zauzet. Odaberi drugi.'); return; }
-    if (pinResult === 'invalid_pin') { restartPinSetup('PIN mora imati 4 znamenke.'); return; }
-    if (pinResult !== 'ok') {
-      // invalid_token — bad link, or one that has already been used to set a PIN.
-      restartPinSetup('Ova poveznica više ne vrijedi. Zatraži novu od vlasnika.');
+
+    // v4.42: link first, store the PIN second, and refuse to continue if the
+    // link fails.
+    //
+    // Both halves are new and both are deliberate. Until now this called
+    // set_waiter_pin_by_token first — which hashed the PIN server-side and set
+    // joined_at in the same statement — and linked afterwards, best-effort.
+    // C3e writes no pin_hash at all, so joined_at now comes from
+    // link_waiter_to_auth, which sets it with COALESCE(joined_at, now())
+    // (014:88). That is why linking moved in front: it is what marks the invite
+    // used, and there is nothing to undo if it fails.
+    //
+    // Nothing is stored on this device until an identity exists. A local PIN
+    // with no session is the worst state C3e can produce — the app opens, the
+    // roster loads, and every write is refused — so it must not be reachable by
+    // pressing four keys and hoping.
+    // Checked BEFORE linking, not after. link_waiter_to_auth rotates the invite
+    // token on success, so failing at the storage step would leave the waiter
+    // holding a dead link and a second attempt reporting the wrong problem
+    // entirely ("this link is no longer valid"). The cause is always the URL —
+    // WebCrypto needs https or localhost — and never the app.
+    if (!pinCryptoAvailable()) { restartPinSetup(PIN_CRYPTO_MSG); return; }
+
+    _inviteVerifying = true;
+    const setupLinkMsg = linkFailureMessage(await linkWaiterIdentity(_inviteToken, _inviteWaiter.id));
+    if (setupLinkMsg) { _inviteVerifying = false; restartPinSetup(setupLinkMsg); return; }
+    try {
+      await setLocalPin(_inviteWaiter.id, _invitePinBuf);
+    } catch (_) {
+      _inviteVerifying = false;
+      restartPinSetup(PIN_CRYPTO_MSG);
       return;
     }
+    _inviteVerifying = false;
     localStorage.setItem('zm_b_cafe_id', _inviteWaiter.cafe_id);
     const session = {id: _inviteWaiter.id, name: _inviteWaiter.name, cafe_id: _inviteWaiter.cafe_id, color: _inviteWaiter.color || AVATAR_COLORS[0]};
     setWaiterSession(session);
-    // Stage C1: give this waiter a real identity on this device. Deliberately
-    // after the PIN is set and deliberately non-fatal — the PIN login path is
-    // untouched, so a waiter whose linking fails is not locked out, they just
-    // have no auth.uid() yet and can be re-invited. Nothing depends on the
-    // identity until C3.
-    const setupLinkMsg = linkFailureMessage(await linkWaiterIdentity(_inviteToken, _inviteWaiter.id));
     // Remove invite token from URL
     history.replaceState({}, '', location.pathname);
-    showToast(setupLinkMsg || 'PIN postavljen! Dobrodošli 👋', setupLinkMsg ? 7000 : undefined);
+    showToast('PIN postavljen! Dobrodošli 👋');
     proceedAfterWaiterAuth(session);
     return;
   }
 
   if (_inviteStep === 'recover') {
+    // Reached only when this device already holds a hash for this waiter — see
+    // handleInviteLoad. So the check is local, exactly as on the login screen,
+    // and verify_waiter_pin is not called from anywhere in the client any more.
     _inviteVerifying = true;
-    const { data: ok } = await sb.rpc('verify_waiter_pin', {
-      p_waiter_id: _inviteWaiter.id,
-      p_pin: _invitePinBuf,
-    });
+    const ok = await verifyLocalPin(_inviteWaiter.id, _invitePinBuf);
     _inviteVerifying = false;
     if (ok) {
       localStorage.setItem('zm_b_cafe_id', _inviteWaiter.cafe_id);
@@ -2042,28 +2258,34 @@ async function handleInviteKey(k) {
       setWaiterSession(session);
       // v4.39: link here too, not only in the setup branch above.
       //
-      // This branch was the only way a returning waiter could arrive, because
-      // handleInviteLoad routes on !waiter.joined_at and joined_at is never
-      // cleared once set_waiter_pin_by_token has written it. So every waiter who
-      // had ever chosen a PIN landed here forever and could never be given an
-      // auth.uid() through the UI — they entered the app as `anon` and were
-      // silently read-only, which since 015 means unable to raise a swap or
-      // offer to cover. It looked like working software: the invite opened, the
-      // PIN was accepted, the roster loaded.
+      // Kept as the record of why the rule below exists. Until v4.39 this branch
+      // did not link, and handleInviteLoad routed to it on !waiter.joined_at —
+      // a flag nothing ever cleared. So every waiter who had once chosen a PIN
+      // landed here forever and could never be given an auth.uid() through the
+      // UI: they entered as `anon` and were silently read-only, which since 015
+      // means unable to raise a swap or offer to cover. It looked like working
+      // software — the invite opened, the PIN was accepted, the roster loaded.
       //
-      // Same contract as the setup branch: deliberately non-fatal, because the
-      // waiter is already through the door by this point and a failed link
-      // should degrade to read-only rather than lock them out.
+      // v4.42 removed the routing flag as well as the missing call, so the two
+      // branches now differ only in whether this device already knows a PIN.
       //
-      // Does not help a waiter already bound to a device they no longer have —
+      // Still does not help a waiter bound to a device they no longer have:
       // link_waiter_to_auth requires auth_user_id IS NULL (014:71) and returns
       // invalid_token otherwise. That is what 017's owner_unlink_waiter() and
       // the 🔓 button in the admin panel are for.
       // Both branches, always. v4.39 exists because this call lived in `setup`
-      // and not here; C3e's local PIN hash lands in both for the same reason.
+      // and not here, and v4.42 keeps the rule while making the failure fatal on
+      // both sides: no identity, no entry. The hash is already on this device by
+      // definition of being in this branch, so there is nothing to write.
       const recoverLinkMsg = linkFailureMessage(await linkWaiterIdentity(_inviteToken, _inviteWaiter.id));
+      if (recoverLinkMsg) {
+        clearWaiterSession();
+        err.textContent = recoverLinkMsg;
+        _invitePinBuf = '';
+        renderInviteDots([]);
+        return;
+      }
       history.replaceState({}, '', location.pathname);
-      if (recoverLinkMsg) showToast(recoverLinkMsg, 7000);
       proceedAfterWaiterAuth(session);
     } else {
       for (let i = 0; i < 4; i++) {
@@ -2071,7 +2293,7 @@ async function handleInviteKey(k) {
         if (d) d.classList.add('error');
       }
       setTimeout(() => { _invitePinBuf = ''; renderInviteDots([]); }, 400);
-      err.textContent = await pinFailureMessage(_inviteWaiter && _inviteWaiter.cafe_id, 'Pogrešan PIN.');
+      err.textContent = 'Pogrešan PIN.';
     }
   }
 }
@@ -2080,20 +2302,23 @@ async function handleInviteKey(k) {
 // LOGOUT
 // ══════════════════════════════════════════════════════════
 async function logout() {
-  if (isOwner()) {
-    await sb.auth.signOut();
-  } else {
-    clearWaiterSession();
-  }
+  // v4.42: a waiter's logout no longer clears the waiter session, because since
+  // C3e that object is display data rather than a credential — the anonymous
+  // Supabase session next to it is the credential, and signing that out would
+  // release nothing the owner could give back except a fresh invite. Clearing
+  // it used to be harmless because the PIN-only screen could rebuild it from
+  // the café id; that screen is gone. Logging out returns the waiter to their
+  // own keypad, which is what "lock the app" means on a personal phone.
+  const wasOwner = isOwner();
+  if (wasOwner) await sb.auth.signOut();
   STATE.currentUser = null;
   STATE.waiters = [];
   STATE.requests = [];
   STATE.dateSchedule = {};
   STATE.cafe = null;
   showScreen('screen-login');
-  const ws = getWaiterSession();
+  const ws = wasOwner ? null : getWaiterSession();
   if (ws) setupWaiterLoginScreen(ws);
-  else if (localStorage.getItem('zm_b_cafe_id')) setupPinOnlyScreen();
   else setupLoginNoSession();
 }
 
@@ -3803,13 +4028,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Only for an anonymous session. With no session at all the role is anon,
     // which has no grant on auth_user_id, and asking would 401 the query.
     let holder = '<span class="warn">nobody — this uid is bound to no waiter row</span>';
+    // v4.42: and whether this device holds the local PIN hash that unlocks it.
+    // Session and hash are independent — a waiter linked before v4.42 has the
+    // first and not the second, and lands on "set a PIN" rather than on the
+    // keypad. That is a normal state, not a fault, and it is invisible without
+    // this line.
+    let pin = '<span class="warn">local PIN: none on this device</span>';
     try {
       const { data } = await sb.from('waiters')
-        .select('name').eq('auth_user_id', user.id).maybeSingle();
-      if (data && data.name) holder = data.name;
+        .select('id,name').eq('auth_user_id', user.id).maybeSingle();
+      if (data && data.name) {
+        holder = data.name;
+        if (hasLocalPin(data.id)) pin = 'local PIN: stored on this device';
+      }
     } catch (_) { holder = 'lookup failed'; }
 
-    return `session: anonymous (waiter device)<br>uid: ${user.id}<br>that is: <b>${holder}</b>`;
+    return `session: anonymous (waiter device)<br>uid: ${user.id}<br>that is: <b>${holder}</b><br>${pin}`;
   }
 
   async function open() {

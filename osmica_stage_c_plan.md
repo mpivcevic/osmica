@@ -217,6 +217,25 @@ this device is not linked. Say so, and point at the fix.
 
 #### C3e — The behavioural change itself
 
+> ⏳ **Written as client v4.42, 23 Aug 2026 — not yet deployed.**
+> `TaskList_2026-08-23.md` is the file that executes C3e, C3f and C4 together.
+> Two things below changed while it was written; both are recorded at the top of
+> that file and repeated here so this document stops contradicting itself.
+>
+> **1. The keypad stays.** Check 2 of C3f says a waiter with a live session sees
+> "no PIN prompt at all", and check 1 says they unlock with their PIN. Those
+> cannot both hold. Resolved in favour of the keypad: the session decides *who
+> you are*, the PIN decides *whether the app opens on this phone right now*, and
+> that is the only job this document ever claimed for it. Check 2 below is
+> rewritten in the task list to match.
+>
+> **2. `setup` and `recover` are collapsed into one path.** The warning below —
+> write the local hash in both branches — was answered by removing the branch.
+> v4.42 routes on whether *this browser* holds a local hash for that waiter,
+> not on `joined_at`. Asking a returning waiter for their old PIN proved nothing
+> anyway: the invite token is the credential either way, and
+> `link_waiter_to_auth` refuses any row that is already bound.
+
 Only now, with the gate satisfied:
 
 - derive a PBKDF2 hash of the PIN with WebCrypto at PIN-set time, store hash and
@@ -245,6 +264,22 @@ Only now, with the gate satisfied:
 5. Every check above run on the `recover` branch as well as `setup`.
 
 ### C4 — Remove the old surface *(destructive, irreversible)*
+
+> ⏳ **Written as migration `018`, 23 Aug 2026 — not applied anywhere.**
+> It carries the gate as executable code: a `DO` block that raises with the
+> offending names if any waiter reads `activated = true, linked = false`, since
+> after `018` that person cannot enter the app at all.
+>
+> **`018` also rewrites `owner_unlink_waiter`**, which assigned `pin_hash = NULL`.
+> Postgres does not check function bodies when a column is dropped, so leaving
+> it alone would have produced a function that looks correct everywhere except
+> in the hands of an owner pressing 🔓. See traps 15 and 16 in
+> `supabase/migrations/README.md`.
+>
+> **Unlike `017`, `018` requires the new client first.** A v4.41 client calls
+> `set_waiter_pin_by_token` and `verify_waiter_pin`; drop those while v4.41 is
+> being served and the app stops working for everyone at once. v4.42 everywhere,
+> then `018`, per project.
 
 Once every waiter is linked and C3 is live — and **only** once C3f check 4 has
 passed, the owner-unlink round trip. C4 deletes the last fallback, so if
