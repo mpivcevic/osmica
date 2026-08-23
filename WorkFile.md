@@ -10,7 +10,6 @@
 - Add types of employees, for example we start with Student and Regular. This should be the option inside Admin panel, when creating the new employee and something we can change as the time goes on, for those who move from Student to Regular for example. This will mostly be for big retailers like Tommy, Interspar and similar.
 - Think about visual tour at first application start-up, how well can it be done and does it make sense?
 - When the waiter loses connection to the APP for whatever reason (clearing cache, replacing a phone or something third) change the status in owners ADMIN panel. Think of claver ways to present it, we might need to send a notification when it happens?
-- Admin panel stays visible under the waiter screen when the owner logs out and a waiter logs in without a page refresh — two headers, two scrollbars. Cause: switchTab (osmica.html:2219) hides only the panes in getVisibleTabOrder(), and `admin` drops out of that list the moment tab-btn-admin is hidden, so the pane keeps display:flex from the owner session. Same applies to `month`. Fix: iterate all five panes instead of the visible order. Pre-existing, unrelated to Stage C, only reachable by someone who holds both roles.
 
 
 

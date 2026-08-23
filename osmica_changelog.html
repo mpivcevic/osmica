@@ -1318,6 +1318,37 @@
       body: "A staff row used to show one state: whether that person had ever set a PIN. It never showed whether their phone is actually tied to their account, which is what decides whether they can request a swap or only look at the roster. Those two states can disagree, and when they did the app looked completely normal while the person quietly could not do anything. Every row now shows both. Alongside it, three screens that used to say only 'Error. Try again.' now say what actually happened — an expired invitation link, a link opened in a browser that already belongs to a colleague, or a phone that is not tied to the account yet — each with the step that fixes it.",
       why: "On 22 August five test staff members showed as active and not one of them could raise a swap request. Nothing on screen said so, in either the owner's view or theirs. A refusal that reads identically to a bug is worse than a refusal, because the first thing anyone does is retry, and the second is assume the app is broken. Both halves of this — showing the real state, and naming the real failure — exist so the same afternoon does not repeat itself when the app is carrying real staff.",
       date: "22 Aug 2026"
+    },
+    {
+      id: "build-4-41-reset-pin",
+      phase: "build",
+      version: "Build 4.41",
+      versionDate: "23 Aug 2026",
+      tag: "fix",
+      title: "The owner can now reset a PIN, not only release a phone",
+      body: "Yesterday's release-phone button appeared only next to staff whose phone was actually tied to their account. Someone who had set a PIN but whose phone had never been tied — which happens whenever an invitation is completed and the connection step does not finish — had no reset action at all, and the owner could do nothing for them. That row now gets a button too, and the app says which of the two situations it is rather than leaving the owner to work it out: release the phone when one is tied, reset the PIN when only a PIN exists. Both send a fresh invitation link, and both make the old one stop working.",
+      why: "It was hidden from precisely the person who needs it most. Once PIN checking moves onto the phone and the old login route is deleted, someone in that state cannot get into the app at all, and this button is the only thing on the owner's side that fixes it. Hiding it there turned the safety feature into a safety feature with a hole in it. One such person already existed on the live app.",
+      date: "23 Aug 2026"
+    },
+    {
+      id: "build-4-41-tab-overlap",
+      phase: "build",
+      version: "Build 4.41",
+      tag: "fix",
+      title: "Two screens no longer stack on top of each other after switching roles",
+      body: "Signing out as the owner and straight back in as a staff member, without reloading the page, left the owner's admin screen rendered underneath the staff screen — two headers, two scrollbars, one page. Reloading cleared it. The cause was that screens are hidden by walking the list of tabs currently available, and the admin tab leaves that list the moment the owner signs out, so nothing was left to hide its screen. It now walks every screen instead of only the reachable ones.",
+      why: "Only someone who holds both roles on one device could ever see it, which in practice means whoever is building the app rather than a café. Worth fixing anyway: it is the kind of thing that reads as data loss when you meet it for the first time, and the fix is one line.",
+      date: "23 Aug 2026"
+    },
+    {
+      id: "build-4-41-dev-identity-readout",
+      phase: "build",
+      version: "Build 4.41",
+      tag: "decision",
+      title: "The testing panel now shows which account the browser is really signed in as",
+      body: "A developer-only panel, invisible on the live site, gained three lines: whether this browser holds a staff session, an owner session, or none at all, and which staff member it belongs to. The app's screen and the browser's actual sign-in can disagree — the app can show one person while the database sees another, or nobody — and until now nothing displayed the second half.",
+      why: "Two of yesterday's verification checks passed for the wrong reason because of exactly that. An owner sign-in was left over in the test window, which meant the step being tested was skipped entirely and a write that should have been refused was allowed on the owner's authority. Both looked like passes. Reading the browser's real identity previously needed a developer console and a cable to a laptop, which is not something anyone will do on a phone at six in the morning, so in practice it was never checked at all.",
+      date: "23 Aug 2026"
     }
   ];
   </script>
