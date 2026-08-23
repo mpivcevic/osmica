@@ -569,7 +569,7 @@ details[open] .hours-chevron::before{content:'▴';}
 <div id="screen-login" class="screen">
   <div class="login-logo"><svg class="brand-mark" aria-hidden="true" focusable="false"><use href="#logo-mark"/></svg><span>Osmica</span></div>
   <p class="login-tagline">Tvoje smjene, tvoja pravila.</p>
-  <p style="font-size:10px;color:var(--text-3);margin-top:-24px;margin-bottom:clamp(14px,2.5dvh,24px);">v4.40</p>
+  <p style="font-size:10px;color:var(--text-3);margin-top:-24px;margin-bottom:clamp(14px,2.5dvh,24px);">v4.41</p>
   <!-- waiter session: show name + PIN keypad -->
   <div id="login-waiter-section" style="display:none;width:100%;flex-direction:column;align-items:center;">
     <div class="login-name-display">
@@ -3740,6 +3740,49 @@ document.addEventListener('DOMContentLoaded', async () => {
     location.href = location.pathname;
   }
 
+  // What the DATABASE thinks this browser is — a different question from what
+  // the app is displaying, and the panel never used to answer it.
+  //
+  // The two can disagree in both directions: the app can show a waiter while
+  // the owner is signed in, or show Ana while the session belongs to Eva. On
+  // 22 Aug that disagreement made two verification checks pass for the wrong
+  // reason, with nothing on screen to say so — an owner login in the incognito
+  // window meant linkWaiterIdentity() returned owner_session and skipped
+  // linking entirely, and the owner's JWT satisfied sr_owner_all on a cover
+  // update that was supposed to be refused.
+  //
+  // getSession() rather than getUser(): it reads local storage instead of
+  // asking the server, so it answers offline and answers instantly, and it is
+  // the same call init() routes on. The console equivalent, which does check
+  // with the server, is:
+  //
+  //   (await sb.auth.getUser()).data.user ?? 'no session'
+  async function sessionReadout() {
+    let user = null;
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      user = session?.user || null;
+    } catch (_) { /* treat as no session */ }
+
+    if (!user) {
+      return '<span class="warn">session: none</span> — role anon, reads only';
+    }
+    if (!user.is_anonymous) {
+      return `<span class="warn">session: OWNER</span> — wrong window for any waiter check<br>uid: ${user.id}`;
+    }
+
+    // Only for an anonymous session. With no session at all the role is anon,
+    // which has no grant on auth_user_id, and asking would 401 the query.
+    let holder = '<span class="warn">nobody — this uid is bound to no waiter row</span>';
+    try {
+      const { data } = await sb.from('waiters')
+        .select('name').eq('auth_user_id', user.id).maybeSingle();
+      if (data && data.name) holder = data.name;
+    } catch (_) { holder = 'lookup failed'; }
+
+    return `session: anonymous (waiter device)<br>uid: ${user.id}<br>that is: <b>${holder}</b>`;
+  }
+
   async function open() {
     const card = sheet.querySelector('.card');
     const ov = readOverride();
@@ -3747,8 +3790,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       <div class="meta">${onDevBackend
         ? 'backend: dev'
         : '<span class="warn">backend: PRODUCTION</span> — SUPA_ENVS.dev is empty'}<br>${SUPA_URL}</div>
+      <div class="meta">session: reading…</div>
       <div class="sub">Loading…</div>`;
     sheet.classList.add('open');
+
+    const readout = await sessionReadout();
 
     // zm_b_cafe_id is only ever written by the waiter paths, and STATE.cafe is
     // only populated once someone is logged in — so on a fresh device sitting
@@ -3780,6 +3826,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       <div class="meta">${onDevBackend
         ? 'backend: dev'
         : '<span class="warn">backend: PRODUCTION</span> — SUPA_ENVS.dev is empty'}<br>${SUPA_URL}</div>
+      <div class="meta">${readout}</div>
       <div class="sub">OWNER</div>
       <button class="row ${ov?.kind === 'owner' || !ov ? 'active' : ''}" data-owner="1">
         <span class="dot" style="background:var(--accent)">V</span><span>Vlasnik (normal login)</span>
