@@ -30,10 +30,30 @@
 > read anything: with no session the app offers nothing but "ask the owner for a
 > link".
 >
-> Concretely, still readable today by anyone holding the publishable key: every
-> waiter's name, colour, pattern, vacations and `joined_at`; every café name; the
-> whole shift_requests and date_schedules history. Verified 24 Aug — a plain
-> `GET /rest/v1/waiters?select=*` answers `200`.
+> **Measured starting inventory for Stage D — production, 24 Aug 2026, probed
+> with the publishable key and no session.** This replaces section 1's
+> pre-migration description; that is the 13 Aug world.
+>
+> | table | anon read | what comes back |
+> |---|---|---|
+> | `cafes` | ✅ 200, 1 row | `id`, `name` ("Štacija"), **`owner_id`**, `created_at` |
+> | `waiters` | ⚠️ 200 **per column** | 8 of 11 columns — see below |
+> | `shift_requests` | ✅ 200, 4 rows | whole table |
+> | `date_schedules` | ✅ 200, **385 rows** | whole table |
+>
+> On `waiters`, `015`'s column grants hold: `phone`, `invite_token` and
+> `auth_user_id` each return `401`. **Readable:** `id`, `cafe_id`, `name`,
+> `color`, `pattern`, `vacations`, `joined_at`, `created_at`.
+>
+> 🔴 **`select=*` returns `401`, and that is a trap, not protection.** The star
+> fails only because it reaches a blocked column; naming the eight safe columns
+> returns `200` and the full roster. A probe using `select=*` will tell you this
+> table is closed when it is open. Always probe column by column.
+>
+> So a stranger holding the publishable key gets: all seven real staff names,
+> their shift patterns and vacations, who has joined and when, the café name, the
+> owner's auth uid, and the entire schedule and request history. Dev answers the
+> same shape.
 
 Written 13 Aug 2026. Supersedes the deferred backlog from 10 Aug.
 All findings below were re-probed live against the production project today,
