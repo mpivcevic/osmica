@@ -10,8 +10,8 @@ commit message.
 **One shared counter across both databases. Never reuse a number.**
 
 The next migration takes the next free number regardless of which project it
-targets. As of 23 Aug 2026 the high-water mark is `018`, so the next file —
-production or dev — is `019`.
+targets. As of 24 Aug 2026 the high-water mark is `018` — applied on both
+projects — so the next file, production or dev, is `019`.
 
 Production's sequence will therefore have gaps. That is expected: a gap means
 that number went to dev.
@@ -58,7 +58,7 @@ SQL editor's success message.
 | 014 | Stage C1: waiter identity (`auth_user_id`, `link_waiter_to_auth`) | ✅ applied 18 Aug — **both projects**; six production rows verified `auth_user_id` null |
 | 015 | scope the `authenticated` role: RLS + column grants | ✅ applied 19 Aug — **both projects**, alongside the v4.38 deploy |
 | 017 | Stage C3a+C3b: `owner_unlink_waiter`, `linked` in `owner_list_waiters` | ✅ applied — **both projects**, dev 22 Aug and production 23 Aug. Signature confirmed to end in `linked boolean` on both, and `owner_unlink_waiter` probed `401` `42501` from outside |
-| 018 | Stage C4: drop the PIN login surface | ⏳ **written, not applied.** Gated — see `TaskList_2026-08-23.md`. Requires **v4.42 deployed first** on the project being migrated, unlike `017`: a v4.41 client calls `set_waiter_pin_by_token` and `verify_waiter_pin` and stops working the moment they go |
+| 018 | Stage C4: drop the PIN login surface | ✅ applied 24 Aug 2026 — **both projects**, dev then production, each after v4.42 was the version being served. All six dropped RPCs and `pin_attempts` probed `404` `PGRST202` from outside on both, with `claim_invite` `200` as control; `waiters.pin_hash` returns `42703 column does not exist`. `owner_unlink_waiter` confirmed by pressing 🔓 in the admin panel on each project — Bruno on dev, Filip on production — because trap 15 means no query could have caught a bad rewrite. See `TaskList_2026-08-23.md` |
 
 ### `migrations/dev/` — osmica-dev (`simavghwjnqytcyeunto`)
 

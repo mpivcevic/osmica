@@ -217,8 +217,10 @@ this device is not linked. Say so, and point at the fix.
 
 #### C3e — The behavioural change itself
 
-> ⏳ **Written as client v4.42, 23 Aug 2026 — not yet deployed.**
-> `TaskList_2026-08-23.md` is the file that executes C3e, C3f and C4 together.
+> ✅ **Done. Client v4.42, deployed to production 24 Aug 2026** (commit
+> `32cb894`, marker verified live and byte-identical to HEAD).
+> `TaskList_2026-08-23.md` is the file that executed C3e, C3f and C4 together,
+> and carries every recorded reading.
 > Two things below changed while it was written; both are recorded at the top of
 > that file and repeated here so this document stops contradicting itself.
 >
@@ -254,10 +256,33 @@ Only now, with the gate satisfied:
 
 #### C3f — Verification
 
+> ✅ **All five passed on dev 24 Aug 2026, as checks 3.1–3.9 of
+> `TaskList_2026-08-23.md`; production re-verified as that file's step 5.**
+>
+> **Check 2 is rewritten, and this document was wrong.** It asked for "no PIN
+> prompt at all", which contradicts check 1 asking the same waiter to unlock
+> with their PIN. Resolved in favour of the keypad — see decision 1 under C3e.
+> What was actually verified: the session resolves *who you are* with no café
+> chooser and no round trip, and the keypad then decides whether the app opens
+> on this phone.
+>
+> **Check 3 needed rewriting too.** `pin_hash is not null` cannot show "no *new*
+> values" on a row that already carries an old one, and v4.42 neither writes nor
+> clears the column. On production Mara's hash read `true` until a 🔓 nulled it.
+> The sound form is comparing `md5(pin_hash)` across the PIN set, or reading the
+> column on a row the owner has just unlinked.
+>
+> **Check 4 is the one C4 was gated on** and it passed on all six of its own
+> steps, on Ana Anić: 🔓, old link refused, new link claimed in a clean browser,
+> row rebound, swap request written. Production repeated it on Mara — `joined_at`
+> at `00:37:08.546Z`, swap request written at `00:37:17.524Z`, nine seconds later.
+
 1. A linked waiter opens the app offline and unlocks with their PIN.
-2. A linked waiter with a live session opens the app and lands on the waiter
-   screen with no PIN prompt at all.
-3. `select pin_hash from public.waiters` shows no *new* values being written.
+2. A linked waiter with a live session opens the app and lands on **their own
+   keypad** — name resolved from `auth.uid()`, no café chooser, no "which waiter
+   is this" round trip.
+3. No *new* `pin_hash` is written. Compare the hash across a PIN set, or read the
+   column on a freshly unlinked row.
 4. A waiter unlinked by the owner in C3a completes a fresh invite, sets a new
    PIN, and can raise a request. **This is the recovery path C4 makes
    irreversible — it must pass before C4 runs.**
@@ -265,7 +290,14 @@ Only now, with the gate satisfied:
 
 ### C4 — Remove the old surface *(destructive, irreversible)*
 
-> ⏳ **Written as migration `018`, 23 Aug 2026 — not applied anywhere.**
+> ✅ **Done. Migration `018` applied to both projects 24 Aug 2026** — dev first,
+> then production, each after v4.42 was the version being served. Verified from
+> outside with the publishable key and no session: all six dropped RPCs and
+> `pin_attempts` return `404`/`PGRST202` on both, `waiters.pin_hash` returns
+> `42703 column does not exist`, and `claim_invite` still returns `200` as a
+> control. The gate never fired on either project — the stranded rows were
+> cleared first.
+>
 > It carries the gate as executable code: a `DO` block that raises with the
 > offending names if any waiter reads `activated = true, linked = false`, since
 > after `018` that person cannot enter the app at all.
@@ -294,6 +326,10 @@ browser costs a staff member their access for good:
 
 After C4, the entire "guess a PIN, discover who you became" surface is gone, and
 migration 009 can be deleted from the repo as historical.
+
+> ✅ **True as of 24 Aug 2026.** `009` is kept in the repo rather than deleted:
+> it is the record of why the two oracles were rate-limited instead of removed
+> for as long as they were.
 
 ---
 

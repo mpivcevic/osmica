@@ -7,18 +7,33 @@
 > still true. Stages A, B and C1-C2 are complete and verified on both projects.
 >
 > For current state, in this order:
-> 1. `TaskList_2026-08-22.md` — C3 part 1, the safety gate. Closed 23 Aug;
+> 1. `TaskList_2026-08-23.md` — C3 part 2: C3e, C3f and C4. **Closed 24 Aug.**
+>    v4.42 and `018` are live on both projects
+> 2. `TaskList_2026-08-22.md` — C3 part 1, the safety gate. Closed 23 Aug;
 >    `017` and v4.40 are live on both projects
-> 2. `TaskList_2026-08-17.md` — the Stage C1–C2 record, closed 22 Aug 2026
-> 3. `osmica_stage_c_plan.md` — the C3/C4 design; C3e and C4 are not yet built
-> 4. `supabase/migrations/README.md` — what is applied where, and the trap list
+> 3. `TaskList_2026-08-17.md` — the Stage C1–C2 record, closed 22 Aug 2026
+> 4. `osmica_stage_c_plan.md` — the C3/C4 design; **C3 and C4 are complete**
+> 5. `supabase/migrations/README.md` — what is applied where, and the trap list
 >
-> **Stage D is narrower than described below.** Migration `015` already enabled
-> RLS on all four tables and wrote the owner and waiter policies. What remains is
-> the four `*_read` policies, which are deliberately `TO anon, authenticated
-> USING (true)`, and the residual anon SELECT grants — and closing them properly
-> depends on C4 removing the PIN login path, because until then a waiter with no
-> session still has to render the café and roster before authenticating.
+> ✅ **Stage C is finished as of 24 Aug 2026.** The PIN is a local unlock, the
+> waiter's identity is their JWT, and `login_waiter_by_pin` — the enumeration
+> oracle this whole plan was built around — no longer exists on either project.
+>
+> 🔴 **Stage D is now unblocked, and is the only thing left between the app and
+> a schema a stranger can read nothing from.** It is narrower than described
+> below: migration `015` already enabled RLS on all four tables and wrote the
+> owner and waiter policies. What remains is the four `*_read` policies, which
+> are deliberately `TO anon, authenticated USING (true)`, and the residual anon
+> SELECT grants. Those were held open because a waiter with no session had to
+> render the café and roster before authenticating — **C4 removed that
+> requirement.** There is no longer a pre-authentication screen that needs to
+> read anything: with no session the app offers nothing but "ask the owner for a
+> link".
+>
+> Concretely, still readable today by anyone holding the publishable key: every
+> waiter's name, colour, pattern, vacations and `joined_at`; every café name; the
+> whole shift_requests and date_schedules history. Verified 24 Aug — a plain
+> `GET /rest/v1/waiters?select=*` answers `200`.
 
 Written 13 Aug 2026. Supersedes the deferred backlog from 10 Aug.
 All findings below were re-probed live against the production project today,
@@ -198,6 +213,11 @@ finally have an `auth.uid()`), and removal of the enumeration surface.
 - **A shared device behind the bar stops working.** See the open question below.
 
 ## Stage D — RLS everywhere
+
+> 🔴 **Unblocked 24 Aug 2026 — this is the next stage.** See the note at the top
+> of this file for what `015` already did and what is genuinely left. The
+> dependency that held it — the pre-authentication café/roster render — is gone
+> with C4.
 
 Now that both roles have `auth.uid()`, the policies are simple.
 
