@@ -10,8 +10,12 @@ commit message.
 **One shared counter across both databases. Never reuse a number.**
 
 The next migration takes the next free number regardless of which project it
-targets. As of 24 Aug 2026 the high-water mark is `018` — applied on both
-projects — so the next file, production or dev, is `019`.
+targets. As of 24 Aug 2026 the high-water mark is `022` — applied on both
+projects — so the next file, production or dev, is `023`.
+
+One number is out of order on purpose: **`022` was carved out of `020`** on
+24 Aug, before either had run anywhere, so its number is later than `dev/021`
+while its subject is older. The counter is a clock, not an ordering of topics.
 
 Production's sequence will therefore have gaps. That is expected: a gap means
 that number went to dev.
@@ -59,6 +63,9 @@ SQL editor's success message.
 | 015 | scope the `authenticated` role: RLS + column grants | ✅ applied 19 Aug — **both projects**, alongside the v4.38 deploy |
 | 017 | Stage C3a+C3b: `owner_unlink_waiter`, `linked` in `owner_list_waiters` | ✅ applied — **both projects**, dev 22 Aug and production 23 Aug. Signature confirmed to end in `linked boolean` on both, and `owner_unlink_waiter` probed `401` `42501` from outside |
 | 018 | Stage C4: drop the PIN login surface | ✅ applied 24 Aug 2026 — **both projects**, dev then production, each after v4.42 was the version being served. All six dropped RPCs and `pin_attempts` probed `404` `PGRST202` from outside on both, with `claim_invite` `200` as control; `waiters.pin_hash` returns `42703 column does not exist`. `owner_unlink_waiter` confirmed by pressing 🔓 in the admin panel on each project — Bruno on dev, Filip on production — because trap 15 means no query could have caught a bad rewrite. See `TaskList_2026-08-23.md` |
+| 019 | Stage D: reads become café-scoped, `anon` loses SELECT | ✅ applied 24 Aug 2026 — **both projects**, dev then production. Ten policies confirmed by name on each, all `{authenticated}`, no `{anon}`; zero anon column privileges and zero anon table privileges. Probed from outside column by column: `cafes`, `date_schedules`, `shift_requests` and all eight readable `waiters` columns return `401` on both, with `claim_invite` `200` as control. Needed no client change — verified on v4.42 in the browser on both projects before v4.43 existed |
+| 020 | Stage D: `cover_request()` DEFINER RPC | ✅ applied 24 Aug 2026 — **both projects**. `prosecdef = true`, `proconfig = {"search_path=public, pg_temp"}` on each; anon `POST /rpc/cover_request` returns `401` on both — the pass here, since the function is fenced rather than dropped (trap 16 in reverse) |
+| 022 | Stage D: drop `sr_waiter_update` | ✅ applied 24 Aug 2026 — **both projects**, each only after v4.43 was confirmed as the file being *served*. Three policies remain on `shift_requests` (`sr_owner_all`, `sr_waiter_insert`, `sr_waiter_read`). Proven by the check the SQL editor cannot make: a linked waiter's own console PATCHing another waiter's request, and PATCHing their own to `approved`, both returning `data: []`. Carved out of `020` before either ran |
 
 ### `migrations/dev/` — osmica-dev (`simavghwjnqytcyeunto`)
 
@@ -69,14 +76,15 @@ SQL editor's success message.
 | 012 | token-keyed set_waiter_pin (dev variant) | ✅ applied |
 | 013 | align dev with production | ✅ applied — reads and constraints only; **declined `003` on purpose**, see its line 15 |
 | 016 | align dev's writes with production | ✅ applied 22 Aug — drops `dev_open_*`, replays `003`'s revokes |
+| 021 | dev identity switcher read (`dev_list_identities`) | ✅ applied 24 Aug — **dev only, and it must stay that way**. A deliberate, narrow reintroduction of anonymous roster reads that `019` had just closed, defensible only because dev holds seeded fakes and the switcher never runs on production (`osmica.html:3938` returns on `IS_PROD_HOST`). Returns exactly five columns — `id, cafe_id, name, color, joined_at` — and a DEFINER function bypasses every column grant, so that list is the only thing protecting `phone` and `invite_token` here. Confirmed `200` with five keys on dev and **`404` on production** |
 
 Production's `009`, `011`, `014` and `015` are also run against dev — they are
 not dev-specific, so they get no dev-numbered file. **`003` was never run on
 dev**; `dev/016` replays it instead, and is the file to read for why the
 divergence was deliberate and why it stopped being defensible.
 
-High-water mark is now `018` — like `017` it targets both projects and
-therefore gets no `dev/` twin. The next file, either project, is `019`.
+High-water mark is now `022` — like `017` and `018` it targets both projects
+and therefore gets no `dev/` twin. The next file, either project, is `023`.
 
 ## Two files that are kept on purpose despite never being run
 
@@ -183,6 +191,22 @@ Both are more useful as worked examples than they would be deleted.
    reads like the pass you have been trained by every earlier probe to expect.
    `404` with `PGRST202` — PostgREST refusing to admit the function is in the
    schema cache — is the only answer that proves a `DROP` landed.
+17. **`select=*` reports a table closed while it is wide open.** A star query
+   fails the moment it touches one blocked column, so `waiters?select=*`
+   returned `401` for the whole of Stage C while naming the eight readable
+   columns returned `200` and the entire roster. The probe that feels most
+   thorough is the one that lied. **Probe column by column**, always — the loop
+   in "Verifying anything" below is the shape to copy.
+18. **The other half of trap 1: a *table-level* `REVOKE` DOES take the column
+   grants with it.** Trap 1 is the direction that silently fails — a
+   column-level `REVOKE` cannot subtract from a table-level grant. This is the
+   direction that works: "when revoking privileges on a table, the corresponding
+   column privileges (if any) are automatically revoked on each column of the
+   table as well." `019` relied on it to remove `006`'s eight-column grant on
+   `waiters`, keeping an explicit column `REVOKE` as belt-and-braces; the
+   `information_schema.column_privileges` check afterwards returned zero rows on
+   both projects, so the documented behaviour held. Knowing both halves is what
+   stops you writing another `002`.
 
 ## Verifying anything
 
@@ -194,24 +218,40 @@ what a stranger can reach.
 # dev. For production swap in the two values from osmica.html:1113-1114.
 BASE='https://simavghwjnqytcyeunto.supabase.co'
 KEY='sb_publishable_xOx4POsl9coB1utDMHlHAw_h1q4oxWA'
-for q in 'name,color' 'phone' 'invite_token' '*'; do
-  printf '%-14s ' "$q"
+
+for t in cafes date_schedules shift_requests; do
+  printf '%-16s ' "$t"
+  curl -s -o /dev/null -w '%{http_code}\n' "$BASE/rest/v1/$t?select=id" -H "apikey: $KEY"
+done
+for q in id name color pattern vacations joined_at cafe_id created_at; do
+  printf 'waiters.%-8s ' "$q"
   curl -s -o /dev/null -w '%{http_code}\n' "$BASE/rest/v1/waiters?select=$q" -H "apikey: $KEY"
 done
+
+# the control — without it a wall of 401s proves only that something is broken
+curl -s -o /dev/null -w 'claim_invite     %{http_code}\n' \
+  -X POST "$BASE/rest/v1/rpc/claim_invite" \
+  -H "apikey: $KEY" -H 'Content-Type: application/json' \
+  -d '{"p_token":"not-a-real-token"}'
 ```
 
-Expected, and **identical on both projects**:
+Expected since Stage D (24 Aug 2026), and **identical on both projects**:
 
 ```
-name,color     200
-phone          401
-invite_token   401
-*              401
+every table and every column   401
+claim_invite                   200
 ```
 
-`200` on any of the last three means a column grant did not take. `401` on the
-first means the safe columns were revoked too far and the login screen is
-broken.
+⚠️ **This section expected something different until 24 Aug, and the difference
+is the whole of Stage D.** It used to expect `name,color` → `200`, and read a
+`401` there as "the safe columns were revoked too far and the login screen is
+broken". That is now the correct state: `019` revoked anon's SELECT entirely,
+the login screen no longer reads any table before authenticating, and
+`claim_invite` is the only endpoint an unauthenticated caller can reach.
+**A `200` on any table or column line is now the failure.**
+
+The control is not optional. Eleven `401`s look identical whether the grants
+went, the project is down, the key is dead, or you typo'd the host.
 
 To probe an RPC rather than a table, POST to `/rest/v1/rpc/<name>` with a body
 of arguments — `TaskList_2026-08-22.md` step 2 has a worked example, including

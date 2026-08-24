@@ -1390,6 +1390,27 @@
       body: "With nothing calling them any more, the two functions that checked PINs over the network are removed from both databases, along with the attempt limiter that existed only to guard them and the stored PIN copies themselves. This is deliberately irreversible. It runs only after a full check that every member of staff who is still on the team has a phone connected to their account, and it refuses to run at all if anyone would be left without one — naming them rather than failing quietly.",
       why: "Switching something off leaves it there to be switched back on by a later change nobody connects to this one. Deleting it ends the entire category: there is no longer a place to ask 'is this the right PIN', so there is nothing to guess, rate-limit, or leak. The reason it can be done safely now, and could not be in August, is that the owner gained a way to release a lost phone and hand out a fresh invitation — which was built first, on purpose, and proven end to end on the live app before anything was deleted.",
       date: "23 Aug 2026"
+    },
+    {
+      id: "build-4-43-roster-not-public",
+      phase: "build",
+      version: "Build 4.43",
+      versionDate: "24 Aug 2026",
+      tag: "decision",
+      title: "The staff list is no longer readable by strangers",
+      body: "Until this build, anyone who opened the app in a browser and looked at how it talks to the database could read the whole staff list without signing in — every name, the colour each person is shown in, their usual working pattern, their holidays, when they joined, the name of the caf\u00e9, and every shift request and rota entry ever recorded. Not a mistake in the code: the app genuinely needed it, because the old login screen showed you a list of names before you had proved who you were. That screen is gone as of the previous build, so the permission it required is now gone too. A device with nobody signed in can reach exactly one thing: the invitation link the owner sends, which only works if you are holding the link.",
+      why: "This was the last of the original findings from June and the one that stayed open longest, because it could not be closed while the app still had to show a list of names to someone who had not logged in. Everything since has been clearing the way for it. The practical effect on staff is nothing at all, which is the point: the same app, the same screens, with the reading done by an account instead of by anybody who asks.",
+      date: "24 Aug 2026"
+    },
+    {
+      id: "build-4-43-cover-single-instruction",
+      phase: "build",
+      version: "Build 4.43",
+      tag: "fix",
+      title: "Offering to cover a shift is now a single, fixed instruction",
+      body: "Taking someone else's shift used to be the app editing that shift request directly, and the permission to do it could not be narrower than the whole caf\u00e9. Anyone signed in as staff could therefore have edited any request in the caf\u00e9 rather than only the parts the app offers: rewriting the note on someone else's request, or marking a swap approved without the owner. The app never offered either, so nothing like it ever happened. From this build the app sends one instruction that says only which shift is being covered, and the database fills in who is covering it from the account making the request. Nothing else can be changed on the way through.",
+      why: "The distance between what an app offers and what its permissions allow is where problems live, and it stays invisible until somebody goes looking. This closes it for the last part of the app where the two differed. It also fixes a quieter thing: when two people offered to cover the same shift within a few seconds, the second one used to be told it worked. Now they are told someone got there first.",
+      date: "24 Aug 2026"
     }
   ];
   </script>

@@ -4,56 +4,66 @@
 > This is the *plan*, not the *status*. Section 1 ("What is actually true right
 > now") describes the world before any migration was applied: it says anonymous
 > writes are open on all four tables and lists five waiters. None of that is
-> still true. Stages A, B and C1-C2 are complete and verified on both projects.
+> still true. **Stages A, B, C and D are all complete and verified on both
+> projects.** Only Stage E remains.
 >
 > For current state, in this order:
-> 1. `TaskList_2026-08-23.md` — C3 part 2: C3e, C3f and C4. **Closed 24 Aug.**
->    v4.42 and `018` are live on both projects
-> 2. `TaskList_2026-08-22.md` — C3 part 1, the safety gate. Closed 23 Aug;
->    `017` and v4.40 are live on both projects
-> 3. `TaskList_2026-08-17.md` — the Stage C1–C2 record, closed 22 Aug 2026
-> 4. `osmica_stage_c_plan.md` — the C3/C4 design; **C3 and C4 are complete**
-> 5. `supabase/migrations/README.md` — what is applied where, and the trap list
+> 1. `TaskList_2026-08-24.md` — **Stage D. Closed 24 Aug.** `019`, `020`, `022`
+>    and v4.43 live on both projects; `dev/021` on dev only
+> 2. `TaskList_2026-08-23.md` — C3 part 2: C3e, C3f and C4. Closed 24 Aug;
+>    v4.42 and `018` live on both projects
+> 3. `TaskList_2026-08-22.md` — C3 part 1, the safety gate. Closed 23 Aug;
+>    `017` and v4.40 live on both projects
+> 4. `TaskList_2026-08-17.md` — the Stage C1–C2 record, closed 22 Aug 2026
+> 5. `osmica_stage_c_plan.md` — the C3/C4 design; **C3 and C4 are complete**
+> 6. `supabase/migrations/README.md` — what is applied where, and the trap list
 >
 > ✅ **Stage C is finished as of 24 Aug 2026.** The PIN is a local unlock, the
 > waiter's identity is their JWT, and `login_waiter_by_pin` — the enumeration
 > oracle this whole plan was built around — no longer exists on either project.
 >
-> 🔴 **Stage D is now unblocked, and is the only thing left between the app and
-> a schema a stranger can read nothing from.** It is narrower than described
-> below: migration `015` already enabled RLS on all four tables and wrote the
-> owner and waiter policies. What remains is the four `*_read` policies, which
-> are deliberately `TO anon, authenticated USING (true)`, and the residual anon
-> SELECT grants. Those were held open because a waiter with no session had to
-> render the café and roster before authenticating — **C4 removed that
-> requirement.** There is no longer a pre-authentication screen that needs to
-> read anything: with no session the app offers nothing but "ask the owner for a
-> link".
+> ✅ **STAGE D IS COMPLETE — 24 Aug 2026, both projects.** Migrations `019`,
+> `020` and `022` are applied to dev and production, `dev/021` to dev only, and
+> client **v4.43** is live. The record is `TaskList_2026-08-24.md`.
 >
-> **Measured starting inventory for Stage D — production, 24 Aug 2026, probed
-> with the publishable key and no session.** This replaces section 1's
-> pre-migration description; that is the 13 Aug world.
+> **What a stranger holding the publishable key reaches now, on either project:**
 >
-> | table | anon read | what comes back |
+> | | dev | production |
 > |---|---|---|
-> | `cafes` | ✅ 200, 1 row | `id`, `name` ("Štacija"), **`owner_id`**, `created_at` |
-> | `waiters` | ⚠️ 200 **per column** | 8 of 11 columns — see below |
-> | `shift_requests` | ✅ 200, 4 rows | whole table |
-> | `date_schedules` | ✅ 200, **385 rows** | whole table |
+> | `cafes`, `date_schedules`, `shift_requests` | `401` | `401` |
+> | `waiters` — every one of the eight formerly-readable columns | `401` | `401` |
+> | `cover_request` | `401` | `401` |
+> | `dev_list_identities` | `200` — deliberate, dev only | `404` |
+> | **`claim_invite`** | `200` | `200` |
 >
-> On `waiters`, `015`'s column grants hold: `phone`, `invite_token` and
-> `auth_user_id` each return `401`. **Readable:** `id`, `cafe_id`, `name`,
-> `color`, `pattern`, `vacations`, `joined_at`, `created_at`.
+> That last row is the entire remaining surface. It is a `SECURITY DEFINER` RPC
+> that takes a 128-bit invite token as its credential and returns one waiter's
+> name and café; it is not enumerable, and it is kept alive on purpose — it is
+> the only door into the app for a device with no session. Everything else
+> answers `42501 permission denied` before RLS is even consulted.
 >
-> 🔴 **`select=*` returns `401`, and that is a trap, not protection.** The star
-> fails only because it reaches a blocked column; naming the eight safe columns
-> returns `200` and the full roster. A probe using `select=*` will tell you this
-> table is closed when it is open. Always probe column by column.
+> **What that deleted.** This morning the same key returned all seven real staff
+> names with their shift patterns and vacations, the café name, the owner's auth
+> uid via `cafes.owner_id`, 4 shift requests and 385 schedule rows. The
+> before/after is recorded step by step in `TaskList_2026-08-24.md`.
 >
-> So a stranger holding the publishable key gets: all seven real staff names,
-> their shift patterns and vacations, who has joined and when, the café name, the
-> owner's auth uid, and the entire schedule and request history. Dev answers the
-> same shape.
+> Stage D also closed a second, quieter hole that `015:222-231` had deferred:
+> `sr_waiter_update` bounded a waiter's UPDATE by café and nothing else, because
+> **RLS cannot restrict which columns an UPDATE touches**. Any linked waiter
+> could rewrite another's note or flip a request they had not raised straight to
+> `approved`. `020`'s `cover_request()` takes the waiter, the café and both
+> written values from the session binding; `022` then dropped the policy. Proven
+> by a linked waiter's own console returning `data: []` for both a foreign-note
+> PATCH and a self-approval PATCH, on each project.
+>
+> 🔴 **Stage E is now the only stage left**, and its first item is the sharpest
+> thing in the system: the owner's password is the sole credential a stranger
+> could still brute-force, and it owns everything. See § Stage E — TOTP, a
+> new-device email, single-use expiring invite tokens, and dropping `phone`.
+>
+> **The section headed "Stage D — RLS everywhere" below is superseded.** It was
+> drafted 13 Aug and opens with four `ALTER TABLE … ENABLE ROW LEVEL SECURITY`
+> statements that `015` ran on 19 Aug. Read it as design history, not as work.
 
 Written 13 Aug 2026. Supersedes the deferred backlog from 10 Aug.
 All findings below were re-probed live against the production project today,
@@ -233,6 +243,14 @@ finally have an `auth.uid()`), and removal of the enumeration surface.
 - **A shared device behind the bar stops working.** See the open question below.
 
 ## Stage D — RLS everywhere
+
+> ✅ **Done, 24 Aug 2026 — but not as written here.** `015` had already enabled
+> RLS and written the owner and waiter policies, so what Stage D actually did was
+> close the exception `015` carved out of itself: the four
+> `FOR SELECT TO anon, authenticated USING (true)` policies and the anon SELECT
+> grants under them, plus `sr_waiter_update`. See the header of this file and
+> `TaskList_2026-08-24.md`. The text below is the 13 Aug design.
+
 
 > 🔴 **Unblocked 24 Aug 2026 — this is the next stage.** See the note at the top
 > of this file for what `015` already did and what is genuinely left. The
