@@ -569,7 +569,7 @@ details[open] .hours-chevron::before{content:'▴';}
 <div id="screen-login" class="screen">
   <div class="login-logo"><svg class="brand-mark" aria-hidden="true" focusable="false"><use href="#logo-mark"/></svg><span>Osmica</span></div>
   <p class="login-tagline">Tvoje smjene, tvoja pravila.</p>
-  <p style="font-size:10px;color:var(--text-3);margin-top:-24px;margin-bottom:clamp(14px,2.5dvh,24px);">v4.42</p>
+  <p style="font-size:10px;color:var(--text-3);margin-top:-24px;margin-bottom:clamp(14px,2.5dvh,24px);">v4.43</p>
   <!-- waiter session: show name + PIN keypad -->
   <div id="login-waiter-section" style="display:none;width:100%;flex-direction:column;align-items:center;">
     <div class="login-name-display">
@@ -2932,14 +2932,24 @@ async function coverRequest(rid) {
   const r = STATE.requests.find(x=>x.id===rid);
   if (!r) return;
   const w = currentWaiter();
-  // .select() is not cosmetic. README trap 8: an UPDATE whose row the policy
-  // filters away comes back 204 with no error, so without it a refusal and a
-  // success are indistinguishable — and the app renders a swap the database
-  // never recorded.
-  const { data: updated, error } = await sb.from('shift_requests')
-    .update({ covered_by: w.id, status: 'pending_approval' }).eq('id', rid).select('id');
-  if (error) { showToast(writeErrorMessage(error), 6000); return; }
-  if (!updated || !updated.length) { showToast(WRITE_REFUSED_MSG, 6000); return; }
+  // v4.43: the write moved into cover_request(), a SECURITY DEFINER RPC (020).
+  // A waiter holds no UPDATE policy on shift_requests at all any more (022), so
+  // this is the only way to cover a shift. Every value the write depends on
+  // comes from the session binding inside the function; rid is all we send.
+  //
+  // The trap-8 reasoning survives, one layer up: a null return is a refusal and
+  // must not look like a success. It means the request was not 'open' when the
+  // call landed — almost always someone else covering it first, which is an
+  // ordinary Saturday and gets its own sentence rather than the scary one.
+  const { data: coveredId, error } = await sb.rpc('cover_request', { p_request_id: rid });
+  if (error) {
+    // not_linked and owner_session are RAISEd inside the function, so they
+    // arrive as P0001 with the name in the message, never as 42501 — which is
+    // why writeErrorMessage() cannot recognise them on its own.
+    if (/not_linked/.test(error.message || '')) { showToast(WRITE_REFUSED_MSG, 6000); return; }
+    showToast(writeErrorMessage(error), 6000); return;
+  }
+  if (!coveredId) { showToast('Netko je već preuzeo ovu smjenu. Osvježi stranicu.', 6000); return; }
   r.coveredBy = w.id;
   r.status = 'pending_approval';
 
@@ -4059,22 +4069,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const readout = await sessionReadout();
 
-    // zm_b_cafe_id is only ever written by the waiter paths, and STATE.cafe is
-    // only populated once someone is logged in — so on a fresh device sitting
-    // on the login screen we know of no café, which is exactly the moment the
-    // switcher is most useful. Fall back to whichever café the project holds.
-    // Safe here because a dev project has one, and this code never runs in prod.
-    let cafeId = STATE.cafe?.id || localStorage.getItem('zm_b_cafe_id');
-    if (!cafeId) {
-      const { data } = await sb.from('cafes').select('id').order('created_at').limit(1);
-      cafeId = data?.[0]?.id || null;
-    }
-
-    let waiters = [];
-    if (cafeId) {
-      const { data } = await sb.from('waiters').select(WAITER_COLS).eq('cafe_id', cafeId).order('created_at');
-      waiters = data || [];
-    }
+    // v4.43: both reads this used to do are 401 with no session since 019 —
+    // and no session is exactly the state this tool exists to get you out of.
+    // dev/021's dev_list_identities() replaces them: DEFINER, dev project only,
+    // and exactly the five columns the rows below consume.
+    //
+    // Note what this does NOT restore. The switcher never minted a session; it
+    // writes zm_b_dev_as and reloads, and init() (line ~1499) enters the waiter
+    // app with whatever session the browser already holds. So from a session-
+    // less window the picker lists everyone and selecting one gives a blank app,
+    // because enterWaiterApp's own reads are 401. With a real linked session in
+    // the browser it works as before — the read policies are cafe-scoped, not
+    // row-scoped — and writes stay honest either way, since cover_request() and
+    // sr_waiter_insert both take the waiter from the binding, never from here.
+    const { data: identities, error: idErr } = await sb.rpc('dev_list_identities');
+    if (idErr) console.warn('[Osmica] dev switcher roster unavailable:', idErr.message);
+    const waiters = identities || [];
 
     const rows = waiters.map(w => {
       const active = ov?.kind === 'waiter' && ov.session.id === w.id;
@@ -4094,7 +4104,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       <button class="row ${ov?.kind === 'owner' || !ov ? 'active' : ''}" data-owner="1">
         <span class="dot" style="background:var(--accent)">V</span><span>Vlasnik (normal login)</span>
       </button>
-      <div class="sub">WAITERS${cafeId ? '' : ' — no café known on this device yet'}</div>
+      <div class="sub">WAITERS${waiters.length ? '' : ' — roster unavailable (is dev/021 applied?)'}</div>
       ${rows || '<div class="sub">none found</div>'}
       <div class="sub">RESET</div>
       <button class="row danger" data-wipe="1">Clear all local data and reload</button>`;
