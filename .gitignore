@@ -1,6 +1,10 @@
 # Tooling scratch — logs and session state, not project files
 .gstack/
 .claude/
+.agents/
 
 # Editor/workspace config
 *.code-workspace
+
+# Local issue tracker — issues stay out of the public repo
+.scratch/
