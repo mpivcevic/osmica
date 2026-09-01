@@ -10,6 +10,13 @@
 - Add types of employees, for example we start with Student and Regular. This should be the option inside Admin panel, when creating the new employee and something we can change as the time goes on, for those who move from Student to Regular for example. This will mostly be for big retailers like Tommy, Interspar and similar.
 - Think about visual tour at first application start-up, how well can it be done and does it make sense?
 - When the waiter loses connection to the APP for whatever reason (clearing cache, replacing a phone or something third) change the status in owners ADMIN panel. Think of claver ways to present it, we might need to send a notification when it happens?
+- Think about implementing part-time people, someone that works for a different coffee shop and would like to cover a shift in his/hers free time. This might be something worth developing, something like a licitation for workhours.
+
+
+
+
+
+
 
 > **Reclassified 24 Aug 2026, when Stage E was paused.** These were found while
 > testing Stage C and carried through Stage D untouched. Two of the three are
