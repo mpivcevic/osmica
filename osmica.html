@@ -2377,26 +2377,6 @@ function waiterById(id) { return STATE.waiters.find(w=>w.id===id); }
 function isOwner() { return STATE.currentUser === 'owner'; }
 function currentWaiter() { return isOwner() ? null : STATE.currentUser; }
 
-// The eligibility rule, hand-written. This copy and roster.js now both encode
-// "holiday → generated schedule → weekly pattern"; they MUST NOT drift. The
-// waiter's own screens already ask the roster (buildRoster below); the owner,
-// request and schedule screens still call this global and migrate in later
-// tickets, after which ticket 07 deletes this copy and leaves only the roster.
-function worksShift(waiter, iso, shift) {
-  if (isOnVacation(waiter, iso)) return false;
-  const override = STATE.dateSchedule[iso]?.[waiter.id];
-  if (override !== undefined) return override.includes(shift);
-  const dow = dayOfWeek(iso);
-  if (shift === 'jutro') return !!waiter.pattern.m[dow];
-  if (shift === 'međusmjena') return dow < 6 && !!(waiter.pattern.s||[])[dow];
-  if (shift === 'popodne') return dow < 6 && !!waiter.pattern.a[dow];
-  return false;
-}
-
-function isOnVacation(waiter, iso) {
-  return (waiter.vacations||[]).some(v => v.from && v.to && iso >= v.from && iso <= v.to);
-}
-
 // dayOfWeek maps Sunday to 6 (weeks start Monday at 0).
 const SUNDAY = 6;
 
@@ -2566,16 +2546,17 @@ function calcWaiterHours(waiter, targetY, targetM) {
   const m = targetM !== undefined ? targetM : now.getMonth();
   const todayIso = isoDate(now);
   const daysInMonth = new Date(y, m+1, 0).getDate();
+  // The roster owns "which shifts is this waiter actually on this date" —
+  // shiftsActive already subtracts approved days off and honours the opening
+  // policy, so an eight-hour shift is counted per active shift. A shift the
+  // opening policy does not run that day no longer counts, even if the generated
+  // schedule placed one there (ADR-0001 precedence).
+  const roster = buildRoster();
   let worked = 0, projected = 0;
   for (let day = 1; day <= daysInMonth; day++) {
     const d = new Date(y, m, day);
     const iso = isoDate(d);
-    let h = 0;
-    ['jutro','međusmjena','popodne'].forEach(shift => {
-      if (!worksShift(waiter, iso, shift)) return;
-      const off = STATE.requests.find(r=>r.waiterId===waiter.id&&r.date===iso&&r.status==='approved'&&(r.shift===shift||r.shift==='oboje'));
-      if (!off) h += 8;
-    });
+    const h = roster.shiftsActive(waiter, iso).length * 8;
     if (iso <= todayIso) worked += h; else projected += h;
   }
   return {worked, total: worked + projected};
@@ -3596,7 +3577,7 @@ function openShiftmakerModal() {
   smShifts={jutro:{enabled:true,min:2},međusmjena:{enabled:true,min:2},popodne:{enabled:true,min:2}};
   smSundayDefault='morning'; smSundayOverrides={}; smWeeks=4; smMode='weeks'; smMonthOffset=1; smDays={}; smPrefs={};
   STATE.waiters.forEach(w=>{smDays[w.id]=6;smPrefs[w.id]='auto';});
-  ['jutro','međusmjena','popodne'].forEach(s=>{
+  ALL_SHIFTS.forEach(s=>{
     document.getElementById(`sm-min-${s}`).textContent=smShifts[s].min;
     const chk=document.querySelector(`.sm-shift-check[data-shift="${s}"]`); if(chk) chk.checked=true;
     document.getElementById(`sm-row-${s}`).classList.remove('sm-disabled');
@@ -3621,7 +3602,7 @@ function renderSmWaiterList() {
         <span class="sm-label">d/tjed</span>
       </div>
       <div class="sm-pref" id="sm-pref-${w.id}">
-        ${['auto','jutro','međusmjena','popodne'].map(p=>`<button class="sm-pref-btn${smPrefs[w.id]===p?' active':''}" data-wid="${w.id}" data-pref="${p}">${p==='auto'?'Auto':p==='jutro'?'I':p==='međusmjena'?'II':'III'}</button>`).join('')}
+        ${['auto', ...ALL_SHIFTS].map(p=>`<button class="sm-pref-btn${smPrefs[w.id]===p?' active':''}" data-wid="${w.id}" data-pref="${p}">${p==='auto'?'Auto':p==='jutro'?'I':p==='međusmjena'?'II':'III'}</button>`).join('')}
       </div>
     </div>`).join('');
   list.querySelectorAll('.sm-stepper-btn[data-wid]').forEach(btn=>{
@@ -3660,7 +3641,10 @@ function assignShiftsForDay(workers, shiftsThisDay, waiterPref) {
 }
 
 async function generateSchedule() {
-  const enabledShifts = ['jutro','međusmjena','popodne'].filter(s=>smShifts[s].enabled);
+  const enabledShifts = ALL_SHIFTS.filter(s=>smShifts[s].enabled);
+  // The roster answers only the holiday question here; the generator keeps its
+  // own generation-time Sunday policy (ADR-0001 says that stays out of the roster).
+  const roster = buildRoster();
   const now = todayDate();
   let startDate, endDate;
   if (smMode==='month') { startDate=new Date(now.getFullYear(),now.getMonth()+smMonthOffset,1); endDate=new Date(startDate.getFullYear(),startDate.getMonth()+1,0); }
@@ -3686,10 +3670,10 @@ async function generateSchedule() {
     const weekAssignments={};
     STATE.waiters.forEach(w=>{
       const days=smDays[w.id]||0;
-      const available=[0,1,2,3,4,5].filter(dow2=>{const dd=addDays(weekStart,dow2);return !isOnVacation(w,isoDate(dd));}).sort(()=>Math.random()-0.5);
+      const available=[0,1,2,3,4,5].filter(dow2=>{const dd=addDays(weekStart,dow2);return !roster.onHoliday(w,isoDate(dd));}).sort(()=>Math.random()-0.5);
       const assigned=new Set(available.slice(0,Math.min(days,available.length)));
       const sunIso=isoDate(addDays(weekStart,6));
-      if ((smSundayOverrides[sunIso]||smSundayDefault)!=='closed'&&days>6&&!isOnVacation(w,sunIso)) assigned.add(6);
+      if ((smSundayOverrides[sunIso]||smSundayDefault)!=='closed'&&days>6&&!roster.onHoliday(w,sunIso)) assigned.add(6);
       weekAssignments[w.id]=assigned;
     });
     for (let dow=0;dow<7;dow++) {
@@ -3699,7 +3683,9 @@ async function generateSchedule() {
       const isSun=dow===6;
       const sundayMode=smSundayOverrides[iso2]||smSundayDefault;
       if (isSun&&sundayMode==='closed') continue;
-      const shiftsThisDay=isSun&&sundayMode==='morning'?['jutro']:enabledShifts;
+      // A morning-only Sunday runs just the first enabled shift — the same
+      // opening-only rule the roster applies (roster.js runningShifts, OPENING_ONLY).
+      const shiftsThisDay=isSun&&sundayMode==='morning'?enabledShifts.slice(0,1):enabledShifts;
       let workers=STATE.waiters.filter(w=>weekAssignments[w.id].has(dow));
       const minNeeded=shiftsThisDay.reduce((s,sh)=>s+smShifts[sh].min,0);
       if (workers.length<minNeeded) {
