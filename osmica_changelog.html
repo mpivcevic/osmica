@@ -1422,6 +1422,17 @@
       body: "The owner sees staffing in three places — the list of days with an uncovered shift on the home screen, the week grid, and the panel that opens when you tap a day. Until this build each worked the count out on its own, and they could disagree. The clearest case: a shift whose only person had been given the day off. The day panel showed it empty, but the home list did not count it as a gap — so a hole in the rota could sit one tap away from a screen that said everything was covered. From this build all three ask the same question, so a shift the home list calls covered reads as covered everywhere, and one it calls a gap is a gap everywhere.",
       why: "A schedule tool is only as trustworthy as its least careful screen. When one view says a day is fine and another says it is short-staffed, the owner has to work out which to believe — and the reassuring one is the dangerous one. Reading a single answer everywhere removes the guesswork, and folds in the approved days off that the home list had been quietly leaving out of its count.",
       date: "7 Sep 2026"
+    },
+    {
+      id: "build-4-45-month-honours-days-off",
+      phase: "build",
+      version: "Build 4.45",
+      versionDate: "7 Sep 2026",
+      tag: "fix",
+      title: "The month calendar now shows every approved day off",
+      body: "On the monthly calendar a day you had been given off could still show you as working. Two cases were wrong. A day off that covered only the middle shift never cleared it — the morning and afternoon cleared, but the middle stayed lit. And if you had two separate approved days off on the same date, only the first was taken into account, so the second shift still showed as worked. From this build the month calendar reads the same rota the rest of the app does, so an approved day off clears the day in full — whichever shift it covers, and however many approvals there are. The owner's month calendar now counts each day's cover the same way as the home, week and day screens, so it can no longer disagree with them.",
+      why: "The month view is the one screen people glance at to see a whole month at once, so a day off it fails to show is a day someone still thinks they are working. Reading the rota everyone else reads means the calendar cannot quietly drift from the truth.",
+      date: "7 Sep 2026"
     }
   ];
   </script>

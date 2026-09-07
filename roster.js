@@ -101,6 +101,16 @@ export function createRoster({
     return enabledShifts.filter(shift => worksShift(waiter, iso, shift));
   }
 
+  // Which of the enabled shifts this waiter is actually on this date: shiftsWorked
+  // minus the shifts an approved day off has taken them off. It is the per-waiter
+  // mirror of the coverage views' approved-off subtraction (activeStaff), and the
+  // waiter month grid reads it so a granted day off clears the cell — a whole-day
+  // ('oboje') or a mid-shift request included, and every approval on the date, not
+  // only the first. (approvedOff is defined with the coverage questions below.)
+  function shiftsActive(waiter, iso) {
+    return shiftsWorked(waiter, iso).filter(shift => !approvedOff(waiter.id, iso, shift));
+  }
+
   // The shifts this waiter could volunteer to cover on this date: the ones the
   // business runs that day (opening policy + enabled list) that the waiter does
   // not already work. A shift that does not run that day is never coverable — so
@@ -178,7 +188,7 @@ export function createRoster({
   // running-shift list stay closed over as internals; the coverage questions read
   // the whole roster.
   return {
-    worksShift, onHoliday, shiftsWorked, coverableShifts, standing,
+    worksShift, onHoliday, shiftsWorked, shiftsActive, coverableShifts, standing,
     activeStaff, coverageCount, openRequests,
   };
 }

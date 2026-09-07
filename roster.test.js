@@ -433,3 +433,78 @@ test('behaviour change 3: coverage resolves operating shifts through the opening
   assert.equal(monSpecial.coverageCount(TUE, 'međusmjena'), 1);
   assert.equal(monSpecial.coverageCount(TUE, 'popodne'), 1);
 });
+
+// ── shiftsActive: the waiter month grid, after an approved day off (ticket 06) ──
+//
+// shiftsWorked answers who the roster *rosters* for a date (ADR-0001); shiftsActive
+// is that minus the shifts an approved day off has taken the waiter off — the
+// per-waiter mirror of the coverage views' approved-off subtraction. The waiter
+// month grid reads it so a granted day off actually clears the cell.
+//
+// The DOM the fix removes lives in osmica.html (renderMonthView), which the suite
+// never touches (see the header). What these two named regressions pin is the
+// roster behaviour that removal depends on. Each contrasts shiftsActive against
+// shiftsWorked, which is the exact shape of the old grid's bug: the grid derived
+// absence by hand and still counted a shift an approved day off had cleared.
+
+// The named regression for behaviour change 1. The old grid cleared only morning
+// and afternoon on an approved day off — never the mid shift — so a waiter granted
+// the mid shift off still showed as working it.
+test('behaviour change 1: an approved day off covering the mid shift clears it', () => {
+  const waiter = {
+    id: 'w1',
+    pattern: { m: [0, 0, 0, 0, 0, 0, 0], s: [1, 0, 0, 0, 0, 0], a: [0, 0, 0, 0, 0, 0] }, // Monday mid only
+    vacations: [],
+  };
+  const requests = [{ waiterId: 'w1', date: MON, shift: 'međusmjena', status: 'approved' }];
+  const roster = createRoster({ requests, enabledShifts: ['jutro', 'međusmjena', 'popodne'] });
+  // The roster still rosters the mid shift (the pattern) — the shape without the fix…
+  assert.deepEqual(roster.shiftsWorked(waiter, MON), ['međusmjena']);
+  // …but the granted day off clears it, mid included.
+  assert.deepEqual(roster.shiftsActive(waiter, MON), []);
+});
+
+// The named regression for behaviour change 2. The old grid found the first
+// approved request only (Array.find), so a waiter with two separate approvals on
+// one date had only the first honoured.
+test('behaviour change 2: every approved request on a date is honoured, not only the first', () => {
+  const waiter = {
+    id: 'w1',
+    pattern: { m: [1, 0, 0, 0, 0, 0, 0], s: [0, 0, 0, 0, 0, 0], a: [1, 0, 0, 0, 0, 0] }, // Monday morning + afternoon
+    vacations: [],
+  };
+  const requests = [
+    { waiterId: 'w1', date: MON, shift: 'jutro', status: 'approved' },
+    { waiterId: 'w1', date: MON, shift: 'popodne', status: 'approved' },
+  ];
+  const roster = createRoster({ requests, enabledShifts: ['jutro', 'međusmjena', 'popodne'] });
+  // Both shifts are rostered — the shape without the fix, where only the first
+  // approval was found and cleared…
+  assert.deepEqual(roster.shiftsWorked(waiter, MON), ['jutro', 'popodne']);
+  // …with the fix both approvals are honoured and the waiter is fully off.
+  assert.deepEqual(roster.shiftsActive(waiter, MON), []);
+});
+
+test('shiftsActive leaves a shift a pending (not yet approved) request stands against', () => {
+  // Only an approved day off clears a shift from the waiter's own grid; an open
+  // request is shown with the pending dot but the shift still reads as worked.
+  const waiter = {
+    id: 'w1',
+    pattern: { m: [1, 0, 0, 0, 0, 0, 0], s: [0, 0, 0, 0, 0, 0], a: [0, 0, 0, 0, 0, 0] },
+    vacations: [],
+  };
+  const requests = [{ waiterId: 'w1', date: MON, shift: 'jutro', status: 'open' }];
+  const roster = createRoster({ requests, enabledShifts: ['jutro', 'međusmjena', 'popodne'] });
+  assert.deepEqual(roster.shiftsActive(waiter, MON), ['jutro']);
+});
+
+test('a whole-day approved request clears every shift from shiftsActive', () => {
+  const waiter = {
+    id: 'w1',
+    pattern: { m: [1, 0, 0, 0, 0, 0, 0], s: [1, 0, 0, 0, 0, 0], a: [1, 0, 0, 0, 0, 0] },
+    vacations: [],
+  };
+  const requests = [{ waiterId: 'w1', date: MON, shift: 'oboje', status: 'approved' }];
+  const roster = createRoster({ requests, enabledShifts: ['jutro', 'međusmjena', 'popodne'] });
+  assert.deepEqual(roster.shiftsActive(waiter, MON), []);
+});

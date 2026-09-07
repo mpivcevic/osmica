@@ -3111,6 +3111,11 @@ function renderMonthView() {
   if (isOwner()) { renderOwnerMonthView(y, m, todayIso); return; }
   const w = currentWaiter();
   if (!w) { document.getElementById('month-calendar').innerHTML=''; return; }
+  // Which shifts the waiter is actually on each day comes from the roster, so an
+  // approved day off clears the cell the same way the other screens honour it. The
+  // old grid cleared absence by hand and had two bugs the roster does not: it never
+  // cleared the mid shift, and it found only the first approved request on a date.
+  const roster = buildRoster();
   const firstDay = new Date(y,m,1);
   const startDow = firstDay.getDay()===0 ? 6 : firstDay.getDay()-1;
   const daysInMonth = new Date(y,m+1,0).getDate();
@@ -3120,13 +3125,11 @@ function renderMonthView() {
   for (let d = 1; d <= daysInMonth; d++) {
     const iso = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const isPast = iso < todayIso, isToday = iso === todayIso;
-    const approvedOff = STATE.requests.find(r=>r.waiterId===w.id&&r.date===iso&&r.status==='approved');
+    // The pending dot is an in-flight indicator, not absence: an open or awaiting
+    // request marks the day, but only an approved day off clears a shift (above).
     const pendingReq = STATE.requests.find(r=>r.waiterId===w.id&&r.date===iso&&(r.status==='open'||r.status==='pending_approval'));
-    let worksM = worksShift(w,iso,'jutro'), worksA = worksShift(w,iso,'popodne'), worksS = worksShift(w,iso,'međusmjena');
-    if (approvedOff) {
-      if (approvedOff.shift==='jutro'||approvedOff.shift==='oboje') worksM=false;
-      if (approvedOff.shift==='popodne'||approvedOff.shift==='oboje') worksA=false;
-    }
+    const active = roster.shiftsActive(w, iso);
+    const worksM = active.includes('jutro'), worksS = active.includes('međusmjena'), worksA = active.includes('popodne');
     const dow = dayOfWeek(iso);
     const isWeekend = dow>=5;
     const cellBg = isWeekend ? 'var(--month-weekend)' : 'var(--surface)';
@@ -3150,26 +3153,28 @@ function renderMonthView() {
 }
 
 function renderOwnerMonthView(y, m, todayIso) {
+  // Coverage per shift comes from the roster — the same coverageCount the home,
+  // week and day-detail views read since ticket 05 — so the month grid can never
+  // contradict them. A shift that does not run that day answers null and its
+  // segment is skipped, which resolves the special day through the opening policy
+  // instead of the old isSun hard-code; the count also subtracts an approved day
+  // off, which the hand-written pattern tally here never did.
+  const roster = buildRoster();
   const firstDay = new Date(y,m,1);
   const startDow = firstDay.getDay()===0 ? 6 : firstDay.getDay()-1;
   const daysInMonth = new Date(y,m+1,0).getDate();
   const covCol = n => n===0?'var(--danger)':n===1?'#eab308':'var(--success)';
+  const seg = c => c===null?'':`<div style="flex:1;height:3px;border-radius:1px;background:${covCol(c)};"></div>`;
   let html = '<div class="calendar-grid">';
   DAY_LABELS.forEach(l => { html += `<div class="cal-header">${l}</div>`; });
   for (let i = 0; i < startDow; i++) html += '<div class="cal-day empty"></div>';
   for (let d = 1; d <= daysInMonth; d++) {
     const iso = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const isToday=iso===todayIso, isPast=iso<todayIso;
-    const dow=dayOfWeek(iso), isSun=dow===6, isWeekend=dow>=5;
+    const dow=dayOfWeek(iso), isWeekend=dow>=5;
     const cellBg=isWeekend?'var(--month-weekend)':'var(--surface)';
     const opacity=isPast&&!isToday?'opacity:0.55;':'';
-    const cI=STATE.waiters.filter(w=>worksShift(w,iso,'jutro')).length;
-    const cII=isSun?null:STATE.waiters.filter(w=>worksShift(w,iso,'međusmjena')).length;
-    const cIII=isSun?null:STATE.waiters.filter(w=>worksShift(w,iso,'popodne')).length;
-    const seg1=`<div style="flex:1;height:3px;border-radius:1px;background:${covCol(cI)};"></div>`;
-    const seg2=cII!==null?`<div style="flex:1;height:3px;border-radius:1px;background:${covCol(cII)};"></div>`:'';
-    const seg3=cIII!==null?`<div style="flex:1;height:3px;border-radius:1px;background:${covCol(cIII)};"></div>`:'';
-    const bar=`<div style="display:flex;gap:1px;width:80%;flex-shrink:0;">${seg1}${seg2}${seg3}</div>`;
+    const bar=`<div style="display:flex;gap:1px;width:80%;flex-shrink:0;">${seg(roster.coverageCount(iso,'jutro'))}${seg(roster.coverageCount(iso,'međusmjena'))}${seg(roster.coverageCount(iso,'popodne'))}</div>`;
     let cls='cal-day'; if(isToday) cls+=' today'; else if(isPast) cls+=' past';
     html+=`<div class="${cls}" style="background:${cellBg};${opacity}flex-direction:column;gap:2px;cursor:pointer;" data-iso="${iso}">${d}${bar}</div>`;
   }
