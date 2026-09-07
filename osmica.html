@@ -1109,6 +1109,10 @@ details[open] .hours-chevron::before{content:'▴';}
 // and the test runner can import them without loading the app. Moved unchanged
 // from the UTILS block below in ticket 02.
 import { isoDate, todayDate, getMonday, addDays, formatDate, dayOfWeek } from './dates.js';
+// The roster module owns the rules about who works what. Screens build one fresh
+// per render and ask it, instead of deriving eligibility by hand. See roster.js
+// and ADR-0001 (docs/adr/0001-opening-policy-precedence.md).
+import { createRoster, ALL_SHIFTS } from './roster.js';
 
 // ══════════════════════════════════════════════════════════
 // SUPABASE INIT
@@ -2373,6 +2377,11 @@ function waiterById(id) { return STATE.waiters.find(w=>w.id===id); }
 function isOwner() { return STATE.currentUser === 'owner'; }
 function currentWaiter() { return isOwner() ? null : STATE.currentUser; }
 
+// The eligibility rule, hand-written. This copy and roster.js now both encode
+// "holiday → generated schedule → weekly pattern"; they MUST NOT drift. The
+// waiter's own screens already ask the roster (buildRoster below); the owner,
+// request and schedule screens still call this global and migrate in later
+// tickets, after which ticket 07 deletes this copy and leaves only the roster.
 function worksShift(waiter, iso, shift) {
   if (isOnVacation(waiter, iso)) return false;
   const override = STATE.dateSchedule[iso]?.[waiter.id];
@@ -2386,6 +2395,23 @@ function worksShift(waiter, iso, shift) {
 
 function isOnVacation(waiter, iso) {
   return (waiter.vacations||[]).some(v => v.from && v.to && iso >= v.from && iso <= v.to);
+}
+
+// A roster built from the current data snapshot, fresh on every call — there is
+// no cached instance. The waiter's own screens pass a neutral opening policy
+// (every date resolves to full), so the roster's answers match the old global
+// worksShift and this slice changes no behaviour; the tickets that do change
+// behaviour supply a real opening policy per screen. The generated schedule is
+// still keyed by waiter id, holidays still come off each waiter, and the enabled
+// shifts are the full three until the shift list is configurable.
+function buildRoster() {
+  return createRoster({
+    waiters: STATE.waiters,
+    requests: STATE.requests,
+    schedule: STATE.dateSchedule,
+    openingPolicy: {},
+    enabledShifts: ALL_SHIFTS,
+  });
 }
 
 function inviteUrl(token) {
@@ -2631,19 +2657,17 @@ function renderWeekStrip() {
   const strip = document.getElementById('week-strip');
   const mon = getMonday(todayDate());
   const todayIso = today();
+  const roster = buildRoster();
+  const w = currentWaiter();
+  const SHIFT_NUMERAL = { jutro:'I', 'međusmjena':'II', popodne:'III' };
   let html = '';
   for (let i = 0; i < 7; i++) {
     const d = addDays(mon, i);
     const iso = isoDate(d);
     const isToday = iso === todayIso;
-    const w = currentWaiter();
     let shiftTxt = '';
     if (w) {
-      const parts = [];
-      if (worksShift(w,iso,'jutro')) parts.push('I');
-      if (worksShift(w,iso,'međusmjena')) parts.push('II');
-      if (worksShift(w,iso,'popodne')) parts.push('III');
-      shiftTxt = parts.join('·');
+      shiftTxt = roster.shiftsWorked(w, iso).map(s => SHIFT_NUMERAL[s]).join('·');
     }
     const hasReq = STATE.requests.some(r=>r.date===iso&&r.status==='open');
     html += `<div class="day-chip${isToday?' today':''}${hasReq?' has-request':''}">
@@ -2659,14 +2683,14 @@ function renderMyShifts() {
   const list = document.getElementById('my-shifts-list');
   const w = currentWaiter();
   if (isOwner()||!w) { list.innerHTML=''; return; }
+  const roster = buildRoster();
   let html = '', count = 0;
   for (let i = 0; i < 14 && count < 5; i++) {
     const d = addDays(todayDate(), i);
     const iso = isoDate(d);
     const dow = dayOfWeek(iso);
-    ['jutro','međusmjena','popodne'].forEach(shift => {
+    roster.shiftsWorked(w, iso).forEach(shift => {
       if (count >= 5) return;
-      if (!worksShift(w, iso, shift)) return;
       const req = STATE.requests.find(r=>r.waiterId===w.id&&r.date===iso&&(r.shift===shift||r.shift==='oboje'));
       let statusHtml = '<span class="shift-card-status status-ok">Potvrđeno</span>';
       if (req) {
