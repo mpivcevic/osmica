@@ -119,8 +119,66 @@ export function createRoster({
     ) || null;
   }
 
+  // ── Coverage: the one place the owner views' staffing maths now lives ────────
+  //
+  // The home gap rows, the week view and the day detail sheet each used to carry
+  // their own copy of "who is on this shift, minus who has the day off"; the
+  // copies had drifted (the gap rows never subtracted an approved day off). These
+  // questions read the whole roster, so those three views now compute coverage one
+  // way and cannot contradict each other. (The owner month view still keeps its own
+  // copy until ticket 06 moves it here too.)
+  //
+  // The not-operating sentinel: a shift that does not run that date answers null,
+  // not [] / 0. That lets a caller tell "runs but nobody covers it" (a gap) from
+  // "does not run at all" (blank / skipped), and is how the day detail resolves
+  // its operating shifts through the opening policy rather than a hard-coded rule.
+
+  // Whether an approved day off has taken this waiter off this shift on this date.
+  // A whole-day request ('oboje') takes them off any of the day's shifts.
+  function approvedOff(waiterId, iso, shift) {
+    return requests.some(r =>
+      r.waiterId === waiterId && r.date === iso && r.status === 'approved' &&
+      (r.shift === shift || r.shift === 'oboje')
+    );
+  }
+
+  // Who is actively working a shift on a date: the waiters the roster says work
+  // it (ADR-0001), minus anyone an approved day off has removed, in roster order.
+  // Null when the shift does not operate that date.
+  function activeStaff(iso, shift) {
+    if (!operates(iso, shift)) return null;
+    return waiters.filter(w => worksShift(w, iso, shift) && !approvedOff(w.id, iso, shift));
+  }
+
+  // How many people cover a shift on a date — the size of the active staff, or
+  // null when the shift does not operate. A gap is a running shift whose count is 0.
+  function coverageCount(iso, shift) {
+    const staff = activeStaff(iso, shift);
+    return staff === null ? null : staff.length;
+  }
+
+  // The still-open day-off requests standing against a shift on a date — the ones
+  // an owner view flags as an unfilled gap. Named for the status it returns: only
+  // 'open', the same filter the week view used before it moved here. A whole-day
+  // request stands against any of the day's shifts. Null when the shift does not
+  // operate. Requests further along the flow are deliberately not open gaps and
+  // are not returned: a coverer awaiting approval ('pending_approval') is on its
+  // way to filled, and an 'approved' day off has already been subtracted from the
+  // count. (Whether a 'cover_rejected' request should reopen as a gap is a
+  // separate decision the swap flows make elsewhere; the coverage views kept the
+  // week view's prior 'open'-only rule.)
+  function openRequests(iso, shift) {
+    if (!operates(iso, shift)) return null;
+    return requests.filter(r =>
+      r.date === iso && r.status === 'open' && (r.shift === shift || r.shift === 'oboje')
+    );
+  }
+
   // The questions the screens need. The opening-policy resolution and the
-  // running-shift list stay closed over as internals; the coverage questions
-  // that read the whole roster arrive with the tickets that need them.
-  return { worksShift, onHoliday, shiftsWorked, coverableShifts, standing };
+  // running-shift list stay closed over as internals; the coverage questions read
+  // the whole roster.
+  return {
+    worksShift, onHoliday, shiftsWorked, coverableShifts, standing,
+    activeStaff, coverageCount, openRequests,
+  };
 }

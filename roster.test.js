@@ -301,3 +301,135 @@ test('standing returns the request against a shift and its state, or null', () =
   assert.equal(roster.standing(waiter, '2026-09-20', 'jutro'), null); // other date
   assert.equal(roster.standing(waiter, MON, 'jutro').waiterId, 'w1'); // not w2's
 });
+
+// ── coverage: activeStaff / coverageCount / openRequests (ticket 05) ────────────
+//
+// The three owner views — home gap rows, the week view, the day detail sheet —
+// used to each carry their own copy of the coverage maths, and they had drifted:
+// the gap rows counted raw pattern workers and never subtracted an approved day
+// off, so a shift covered only by someone who had been given the day off read as
+// staffed there while the day detail read it as empty. These questions are the
+// one place the maths now lives, so every view agrees.
+//
+// The not-operating sentinel: a shift that does not run that day answers null,
+// not [] / 0. That is how a view tells "runs but nobody covers it" (a gap) from
+// "does not run at all" (blank / skipped), and how the day detail resolves its
+// operating shifts through the opening policy instead of a hard-coded rule.
+
+const scheduleOn = (iso, id, shifts) => ({ [iso]: { [id]: shifts } });
+
+test('activeStaff lists the waiters working a shift, in roster order', () => {
+  const waiters = [
+    { id: 'a', pattern: { m: [1, 0, 0, 0, 0, 0, 0], s: [], a: [] }, vacations: [] },
+    { id: 'b', pattern: { m: [1, 0, 0, 0, 0, 0, 0], s: [], a: [] }, vacations: [] },
+    { id: 'c', pattern: { m: [0, 0, 0, 0, 0, 0, 0], s: [], a: [] }, vacations: [] },
+  ];
+  const roster = createRoster({ waiters, enabledShifts: ['jutro'] });
+  assert.deepEqual(roster.activeStaff(MON, 'jutro').map(w => w.id), ['a', 'b']);
+  assert.equal(roster.coverageCount(MON, 'jutro'), 2);
+});
+
+test('coverage counts active staff — an approved day off drops the shift to a gap', () => {
+  // The exact divergence this ticket closes: the only worker has an approved day
+  // off, so the shift runs but nobody covers it. Coverage is 0 (a gap), not the
+  // raw pattern count of 1 the home gap rows used to report.
+  const waiters = [{ id: 'w1', pattern: { m: [1, 1, 1, 1, 1, 1, 1], s: [], a: [] }, vacations: [] }];
+  const requests = [{ waiterId: 'w1', date: MON, shift: 'jutro', status: 'approved' }];
+  const roster = createRoster({ waiters, requests, enabledShifts: ['jutro'] });
+  assert.deepEqual(roster.activeStaff(MON, 'jutro').map(w => w.id), []);
+  assert.equal(roster.coverageCount(MON, 'jutro'), 0); // a gap, not null
+});
+
+test('a whole-day approved request removes the waiter from every shift that day', () => {
+  const waiters = [{
+    id: 'w1',
+    pattern: { m: [1, 1, 1, 1, 1, 1, 1], s: [1, 1, 1, 1, 1, 1, 1], a: [1, 1, 1, 1, 1, 1, 1] },
+    vacations: [],
+  }];
+  const requests = [{ waiterId: 'w1', date: MON, shift: 'oboje', status: 'approved' }];
+  const roster = createRoster({ waiters, requests, enabledShifts: ['jutro', 'međusmjena', 'popodne'] });
+  assert.equal(roster.coverageCount(MON, 'jutro'), 0);
+  assert.equal(roster.coverageCount(MON, 'međusmjena'), 0);
+  assert.equal(roster.coverageCount(MON, 'popodne'), 0);
+});
+
+test('a pending (not yet approved) request leaves the waiter counted as covering', () => {
+  // Only an approved day off removes someone from the count. An open request is a
+  // gap warning, but until it is granted the person is still on the shift.
+  const waiters = [{ id: 'w1', pattern: { m: [1, 1, 1, 1, 1, 1, 1], s: [], a: [] }, vacations: [] }];
+  const requests = [{ waiterId: 'w1', date: MON, shift: 'jutro', status: 'open' }];
+  const roster = createRoster({ waiters, requests, enabledShifts: ['jutro'] });
+  assert.equal(roster.coverageCount(MON, 'jutro'), 1);
+});
+
+test('openRequests returns only the open gap warnings against a shift', () => {
+  const requests = [
+    { waiterId: 'w1', date: MON, shift: 'jutro', status: 'open' },
+    { waiterId: 'w2', date: MON, shift: 'oboje', status: 'open' }, // whole-day, stands against jutro
+    { waiterId: 'w3', date: MON, shift: 'jutro', status: 'approved' }, // granted → not open
+    { waiterId: 'w4', date: MON, shift: 'jutro', status: 'pending_approval' }, // being covered → not open
+    { waiterId: 'w6', date: MON, shift: 'jutro', status: 'cover_rejected' }, // coverer fell through → not 'open'
+    { waiterId: 'w5', date: SUN, shift: 'jutro', status: 'open' }, // other date
+  ];
+  const roster = createRoster({ requests, enabledShifts: ['jutro', 'međusmjena', 'popodne'] });
+  // Only status 'open' counts, matching the week view's prior filter — not
+  // 'pending_approval', 'approved', or 'cover_rejected'.
+  assert.deepEqual(roster.openRequests(MON, 'jutro').map(r => r.waiterId), ['w1', 'w2']);
+});
+
+test('coverage and pending answer null for a shift that does not operate that day', () => {
+  const waiters = [{
+    id: 'w1',
+    pattern: { m: [1, 1, 1, 1, 1, 1, 1], s: [1, 1, 1, 1, 1, 1, 1], a: [1, 1, 1, 1, 1, 1, 1] },
+    vacations: [],
+  }];
+  const requests = [{ waiterId: 'w1', date: MON, shift: 'popodne', status: 'open' }];
+  const roster = createRoster({
+    waiters,
+    requests,
+    enabledShifts: ['jutro', 'međusmjena', 'popodne'],
+    openingPolicy: { overrides: { [MON]: OPENING_ONLY } }, // only the first shift runs
+  });
+  assert.equal(roster.coverageCount(MON, 'jutro'), 1); // runs, covered
+  assert.equal(roster.activeStaff(MON, 'međusmjena'), null); // does not run
+  assert.equal(roster.coverageCount(MON, 'popodne'), null); // does not run
+  assert.equal(roster.openRequests(MON, 'popodne'), null); // does not run → not a gap
+  assert.deepEqual(roster.openRequests(MON, 'jutro'), []); // runs, no open request
+});
+
+// The named regression for behaviour change 3. The day detail sheet used to
+// hard-code "the special day (Sunday) means morning only", so which shifts a
+// coverage view shows was a fixed function of the weekday. The fix is that the
+// coverage views resolve operating shifts through the *opening policy* instead.
+//
+// The DOM hard-code itself lives in osmica.html (openDayDetail), which the suite
+// deliberately never touches (see the header). What this test pins is the roster
+// behaviour that removal now depends on: coverage follows the configured policy,
+// not the calendar weekday. Two contrasts make that unmistakable — the same date
+// answers differently under two policies (so it is the policy, not the day, that
+// decides), and a policy on a *non-Sunday* weekday takes effect (which a Sunday
+// hard-code could never express).
+test('behaviour change 3: coverage resolves operating shifts through the opening policy, not a hard-coded Sunday', () => {
+  const waiters = [{
+    id: 'w1',
+    pattern: { m: [1, 1, 1, 1, 1, 1, 1], s: [1, 1, 1, 1, 1, 1, 1], a: [1, 1, 1, 1, 1, 1, 1] },
+    vacations: [],
+  }];
+  const enabledShifts = ['jutro', 'međusmjena', 'popodne'];
+
+  // Same Monday, two policies: it is the policy that flips mid/afternoon between
+  // counted and not-operating, not anything about the date.
+  const full = createRoster({ waiters, enabledShifts, openingPolicy: {} });
+  const monSpecial = createRoster({ waiters, enabledShifts, openingPolicy: { weekday: { 0: OPENING_ONLY } } });
+  assert.equal(full.coverageCount(MON, 'međusmjena'), 1); // full → mid runs and is covered
+  assert.equal(full.coverageCount(MON, 'popodne'), 1);
+  assert.equal(monSpecial.coverageCount(MON, 'međusmjena'), null); // opening-only → mid does not operate
+  assert.equal(monSpecial.coverageCount(MON, 'popodne'), null);
+
+  // And the special weekday can be Monday — a restaurant, not a café — which the
+  // old Sunday-only hard-code could not represent. Its ordinary days still run full.
+  assert.equal(monSpecial.coverageCount(MON, 'jutro'), 1); // the one shift a special Monday keeps
+  const TUE = '2026-09-08';
+  assert.equal(monSpecial.coverageCount(TUE, 'međusmjena'), 1);
+  assert.equal(monSpecial.coverageCount(TUE, 'popodne'), 1);
+});

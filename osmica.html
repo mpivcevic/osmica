@@ -2599,13 +2599,19 @@ function renderOwnerHome() {
       <span style="color:var(--text-3);">→</span>
     </div>` : '';
 
+  // Staffing gaps come from the roster, the same coverage question the week view
+  // and the day detail read. A gap is a shift that runs that day (opening policy)
+  // but whose active count is 0 — coverageCount returns null for a shift that does
+  // not run, so those are never flagged. This subtracts approved days off, which
+  // the old hand-written count here did not: a shift covered only by someone given
+  // the day off now reads as a gap here, agreeing with the day detail sheet.
+  const roster = buildRoster();
   const gapRows = [];
   for (let i = 0; i < 14; i++) {
     const d = addDays(now, i);
     const iso = isoDate(d);
     const dow = dayOfWeek(iso);
-    const shiftsToCheck = dow===6 ? ['jutro'] : ['jutro','međusmjena','popodne'];
-    const empty = shiftsToCheck.filter(s => STATE.waiters.filter(w=>worksShift(w,iso,s)).length === 0);
+    const empty = ALL_SHIFTS.filter(s => roster.coverageCount(iso, s) === 0);
     if (empty.length) gapRows.push({iso, d, dow, empty});
   }
   const gapNums = {jutro:'I',međusmjena:'II',popodne:'III'};
@@ -3052,26 +3058,28 @@ function renderWeekView() {
   });
   html += '</div>';
 
-  ['jutro','međusmjena','popodne'].forEach(shift => {
+  // Coverage comes from the roster — the same questions the owner home and day
+  // detail read. activeStaff is null for a shift that does not run that day under
+  // the opening policy (the special weekday's mid/afternoon), which is what draws
+  // the "—" cell; otherwise it is the staff actively covering, and openRequests
+  // are the open day-off requests that flag the cell as a gap.
+  const roster = buildRoster();
+  ALL_SHIFTS.forEach(shift => {
     const rowLabel = shift==='jutro'?'I':shift==='međusmjena'?'II':'III';
     html += `<div class="week-row"><div class="week-row-label">${rowLabel}</div>`;
-    isodays.forEach((iso,di) => {
-      const dow = dayOfWeek(iso);
-      const isSundayAft = dow===6&&(shift==='popodne'||shift==='međusmjena');
+    isodays.forEach(iso => {
       const isT = iso===todayIso;
+      const active = roster.activeStaff(iso, shift);
       let cellContent = '', hasGap = false;
-      if (!isSundayAft) {
-        const workers = STATE.waiters.filter(w=>worksShift(w,iso,shift));
-        const offIds = STATE.requests.filter(r=>r.date===iso&&(r.shift===shift||r.shift==='oboje')&&r.status==='approved').map(r=>r.waiterId);
-        const active = workers.filter(w=>!offIds.includes(w.id));
-        const pending = STATE.requests.filter(r=>r.date===iso&&(r.shift===shift||r.shift==='oboje')&&r.status==='open');
+      if (active === null) {
+        cellContent = `<div style="color:var(--text-3);font-size:10px;text-align:center;padding:4px;">—</div>`;
+      } else {
         active.forEach(w => {
           const isMe = cw && w.id===cw.id;
           cellContent += `<div class="person-chip" style="background:${w.color};${(!isOwner()&&!isMe)?'opacity:0.28;':''}">${initials(w.name)}</div>`;
         });
-        if (pending.length) { hasGap=true; pending.forEach(r=>{ const w=waiterById(r.waiterId); cellContent+=`<div class="gap-chip">! ${w?.name.split(' ')[0]||'?'}</div>`; }); }
-      } else {
-        cellContent = `<div style="color:var(--text-3);font-size:10px;text-align:center;padding:4px;">—</div>`;
+        const openReqs = roster.openRequests(iso, shift);
+        if (openReqs.length) { hasGap=true; openReqs.forEach(r=>{ const w=waiterById(r.waiterId); cellContent+=`<div class="gap-chip">! ${w?.name.split(' ')[0]||'?'}</div>`; }); }
       }
       html += `<div class="week-cell${isT?' today-col':''}${hasGap?' gap':''}">${cellContent}</div>`;
     });
@@ -3181,7 +3189,11 @@ function renderOwnerMonthView(y, m, todayIso) {
 function openDayDetail(iso) {
   const d = new Date(iso+'T12:00:00');
   const dow = dayOfWeek(iso);
-  const isSun = dow===6;
+  // Which shifts run and who covers them both come from the roster, so the sheet
+  // agrees with the home and week views. A shift the business does not run that
+  // day resolves through the opening policy (activeStaff is null) and is skipped —
+  // replacing the old hard-coded "the special day means morning only" rule.
+  const roster = buildRoster();
   document.getElementById('day-detail-title').textContent = `${DAY_LABELS_FULL[dow]}, ${d.getDate()}. ${MONTH_NAMES[d.getMonth()]}`;
   const SHIFTS = [
     {key:'jutro',num:'I',time:'06:00–14:00',bg:'var(--shift-i-light)',col:'var(--shift-i)'},
@@ -3190,10 +3202,8 @@ function openDayDetail(iso) {
   ];
   let body = '';
   SHIFTS.forEach(s => {
-    if (isSun && s.key!=='jutro') return;
-    const workers = STATE.waiters.filter(w=>worksShift(w,iso,s.key));
-    const approved = STATE.requests.filter(r=>r.date===iso&&(r.shift===s.key||r.shift==='oboje')&&r.status==='approved').map(r=>r.waiterId);
-    const active = workers.filter(w=>!approved.includes(w.id));
+    const active = roster.activeStaff(iso, s.key);
+    if (active === null) return; // the business does not run this shift that day
     const names = active.map(w=>w.name.split(' ')[0]).join(', ')||'—';
     const pillCol = active.length===0?'var(--danger)':active.length===1?'var(--warn)':'var(--success)';
     body += `<div class="day-detail-row">
