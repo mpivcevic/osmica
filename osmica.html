@@ -1104,7 +1104,12 @@ details[open] .hours-chevron::before{content:'▴';}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script>
+<script type="module">
+// Pure date helpers live in their own module (dates.js) so the roster module
+// and the test runner can import them without loading the app. Moved unchanged
+// from the UTILS block below in ticket 02.
+import { isoDate, todayDate, getMonday, addDays, formatDate, dayOfWeek } from './dates.js';
+
 // ══════════════════════════════════════════════════════════
 // SUPABASE INIT
 // ══════════════════════════════════════════════════════════
@@ -2325,21 +2330,11 @@ async function logout() {
 // ══════════════════════════════════════════════════════════
 // UTILS
 // ══════════════════════════════════════════════════════════
-function isoDate(d) {
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
+// isoDate, todayDate, getMonday, addDays, formatDate and dayOfWeek moved to
+// dates.js in ticket 02 and are imported at the top of this module. today()
+// stays here and calls the imported isoDate.
 function today() { return isoDate(new Date()); }
-function todayDate() { return new Date(); }
 function initials(name) { return (name||'?').split(' ').map(p=>p[0]).join('').toUpperCase().slice(0,2); }
-function getMonday(d) {
-  const dt = new Date(d);
-  const day = dt.getDay();
-  dt.setDate(dt.getDate() + (day===0?-6:1-day));
-  dt.setHours(0,0,0,0);
-  return dt;
-}
-function addDays(d, n) { const r=new Date(d); r.setDate(r.getDate()+n); return r; }
-function formatDate(iso) { const [y,m,d]=iso.split('-'); return `${d}.${m}.${y}`; }
 function shiftLabel(s) {
   if (s==='jutro') return 'I Jutro';
   if (s==='međusmjena') return 'II Međusmjena';
@@ -2377,7 +2372,6 @@ function writeErrorMessage(error) {
 function waiterById(id) { return STATE.waiters.find(w=>w.id===id); }
 function isOwner() { return STATE.currentUser === 'owner'; }
 function currentWaiter() { return isOwner() ? null : STATE.currentUser; }
-function dayOfWeek(iso) { const d=new Date(iso+'T12:00:00'); const day=d.getDay(); return day===0?6:day-1; }
 
 function worksShift(waiter, iso, shift) {
   if (isOnVacation(waiter, iso)) return false;
