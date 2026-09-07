@@ -1411,6 +1411,17 @@
       body: "Taking someone else's shift used to be the app editing that shift request directly, and the permission to do it could not be narrower than the whole caf\u00e9. Anyone signed in as staff could therefore have edited any request in the caf\u00e9 rather than only the parts the app offers: rewriting the note on someone else's request, or marking a swap approved without the owner. The app never offered either, so nothing like it ever happened. From this build the app sends one instruction that says only which shift is being covered, and the database fills in who is covering it from the account making the request. Nothing else can be changed on the way through.",
       why: "The distance between what an app offers and what its permissions allow is where problems live, and it stays invisible until somebody goes looking. This closes it for the last part of the app where the two differed. It also fixes a quieter thing: when two people offered to cover the same shift within a few seconds, the second one used to be told it worked. Now they are told someone got there first.",
       date: "24 Aug 2026"
+    },
+    {
+      id: "build-4-44-coverage-one-way",
+      phase: "build",
+      version: "Build 4.44",
+      versionDate: "7 Sep 2026",
+      tag: "fix",
+      title: "Every owner view now counts a shift's cover the same way",
+      body: "The owner sees staffing in three places — the list of days with an uncovered shift on the home screen, the week grid, and the panel that opens when you tap a day. Until this build each worked the count out on its own, and they could disagree. The clearest case: a shift whose only person had been given the day off. The day panel showed it empty, but the home list did not count it as a gap — so a hole in the rota could sit one tap away from a screen that said everything was covered. From this build all three ask the same question, so a shift the home list calls covered reads as covered everywhere, and one it calls a gap is a gap everywhere.",
+      why: "A schedule tool is only as trustworthy as its least careful screen. When one view says a day is fine and another says it is short-staffed, the owner has to work out which to believe — and the reassuring one is the dangerous one. Reading a single answer everywhere removes the guesswork, and folds in the approved days off that the home list had been quietly leaving out of its count.",
+      date: "7 Sep 2026"
     }
   ];
   </script>
