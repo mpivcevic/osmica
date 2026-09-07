@@ -39,8 +39,13 @@ self.addEventListener('fetch', e => {
   // cache still applies to them and respects their cache headers.
   if (url.origin !== self.location.origin) return;
 
-  // HTML: always fetch from network, never cache — guarantees fresh version on every open
-  if (url.pathname.endsWith('.html') || url.pathname.endsWith('/')) {
+  // HTML and same-origin JavaScript: always fetch from network, never cache.
+  // HTML guarantees a fresh version on every open; JS must follow the same rule
+  // so a device can never run stale logic against fresh markup — a cached script
+  // outliving the HTML it was written for is the half-applied release this guards
+  // against. Application logic is moving into same-origin .js modules, and this
+  // policy has to be on devices before the first one ships.
+  if (url.pathname.endsWith('.html') || url.pathname.endsWith('.js') || url.pathname.endsWith('/')) {
     e.respondWith(fetch(e.request));
     return;
   }
