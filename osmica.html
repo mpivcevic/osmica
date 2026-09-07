@@ -1112,7 +1112,7 @@ import { isoDate, todayDate, getMonday, addDays, formatDate, dayOfWeek } from '.
 // The roster module owns the rules about who works what. Screens build one fresh
 // per render and ask it, instead of deriving eligibility by hand. See roster.js
 // and ADR-0001 (docs/adr/0001-opening-policy-precedence.md).
-import { createRoster, ALL_SHIFTS } from './roster.js';
+import { createRoster, ALL_SHIFTS, OPENING_ONLY } from './roster.js';
 
 // ══════════════════════════════════════════════════════════
 // SUPABASE INIT
@@ -2397,19 +2397,28 @@ function isOnVacation(waiter, iso) {
   return (waiter.vacations||[]).some(v => v.from && v.to && iso >= v.from && iso <= v.to);
 }
 
+// dayOfWeek maps Sunday to 6 (weeks start Monday at 0).
+const SUNDAY = 6;
+
+// The opening policy in force by default: Sunday — the special weekday — runs
+// opening-only (just the first shift), every other day runs full. This is where
+// the shiftmaker starts; per-date closures are a generation-time concern and are
+// not represented here.
+const SPECIAL_WEEKDAY_POLICY = { weekday: { [SUNDAY]: OPENING_ONLY } };
+
 // A roster built from the current data snapshot, fresh on every call — there is
-// no cached instance. The waiter's own screens pass a neutral opening policy
-// (every date resolves to full), so the roster's answers match the old global
-// worksShift and this slice changes no behaviour; the tickets that do change
-// behaviour supply a real opening policy per screen. The generated schedule is
-// still keyed by waiter id, holidays still come off each waiter, and the enabled
-// shifts are the full three until the shift list is configurable.
+// no cached instance. It carries the special-weekday opening policy, so the
+// screens see Sunday's opening-only rule. The waiter's own screens are
+// unaffected by that (mid and afternoon already have no Sunday pattern); the
+// request screen relies on it to stop offering a shift the business doesn't run.
+// The generated schedule is keyed by waiter id, holidays come off each waiter,
+// and the enabled shifts are the full three until the shift list is configurable.
 function buildRoster() {
   return createRoster({
     waiters: STATE.waiters,
     requests: STATE.requests,
     schedule: STATE.dateSchedule,
-    openingPolicy: {},
+    openingPolicy: SPECIAL_WEEKDAY_POLICY,
     enabledShifts: ALL_SHIFTS,
   });
 }
@@ -2691,7 +2700,7 @@ function renderMyShifts() {
     const dow = dayOfWeek(iso);
     roster.shiftsWorked(w, iso).forEach(shift => {
       if (count >= 5) return;
-      const req = STATE.requests.find(r=>r.waiterId===w.id&&r.date===iso&&(r.shift===shift||r.shift==='oboje'));
+      const req = roster.standing(w, iso, shift);
       let statusHtml = '<span class="shift-card-status status-ok">Potvrđeno</span>';
       if (req) {
         if (req.status==='open') statusHtml='<span class="shift-card-status status-pending">Zahtjev poslan</span>';
@@ -2749,6 +2758,7 @@ function renderReqCalendar() {
   const daysInMonth = new Date(y, m+1, 0).getDate();
   const todayIso = today();
   const w = currentWaiter();
+  const roster = buildRoster();
   let html = '';
   DAY_LABELS.forEach(l => { html += `<div class="cal-header">${l}</div>`; });
   for (let i = 0; i < startDow; i++) html += '<div class="cal-day empty"></div>';
@@ -2758,7 +2768,7 @@ function renderReqCalendar() {
     const isSelected = iso === reqSelectedDate;
     const isTod = iso === todayIso;
     const hasReq = STATE.requests.some(r=>r.waiterId===w?.id&&r.date===iso&&r.status!=='approved');
-    const worksDay = w && (['jutro','međusmjena','popodne'].some(s=>worksShift(w,iso,s)));
+    const worksDay = w && roster.shiftsWorked(w, iso).length > 0;
     let cls = 'cal-day';
     if (isPast) cls += ' past';
     else if (!worksDay) cls += ' off-day';
@@ -2778,10 +2788,10 @@ function renderReqShiftSection() {
   const section = document.getElementById('req-shift-section');
   const canPicker = document.getElementById('req-can-cover-picker');
   if (!reqSelectedDate || !w) { section.style.display = 'none'; return; }
-  const allShifts = ['jutro', 'međusmjena', 'popodne'];
-  const dow = dayOfWeek(reqSelectedDate);
-  const myShifts = allShifts.filter(s => !(s === 'popodne' && dow === 6) && worksShift(w, reqSelectedDate, s));
-  const otherShifts = allShifts.filter(s => !(s === 'popodne' && dow === 6) && !myShifts.includes(s));
+  // Only shifts the business runs that day, minus the ones the waiter works —
+  // the roster's coverableShifts, not a hand filter. A shift that does not run
+  // that day (mid or afternoon on the special weekday) is never offered.
+  const otherShifts = buildRoster().coverableShifts(w, reqSelectedDate);
   if (otherShifts.length === 0) { section.style.display = 'none'; return; }
   const shiftIcon = s => s === 'jutro' ? 'I' : s === 'međusmjena' ? 'II' : 'III';
   const shiftName = s => s === 'jutro' ? 'Jutro' : s === 'međusmjena' ? 'Međusmjena' : 'Popodne';
@@ -2804,8 +2814,7 @@ async function submitRequest() {
   const note = document.getElementById('req-note').value.trim();
   const btn = document.getElementById('btn-submit-request');
   btn.disabled = true;
-  const allShifts = ['jutro', 'međusmjena', 'popodne'];
-  const myShifts = allShifts.filter(s => worksShift(w, reqSelectedDate, s));
+  const myShifts = buildRoster().shiftsWorked(w, reqSelectedDate);
   const shift = myShifts.length === 1 ? myShifts[0] : 'oboje';
   const canArr = [...reqCanCover];
   const shiftName = s => s === 'jutro' ? 'Jutro' : s === 'međusmjena' ? 'Međusmjena' : 'Popodne';

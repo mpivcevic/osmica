@@ -234,3 +234,70 @@ test('shiftsWorked is empty on a holiday', () => {
   const roster = createRoster({ enabledShifts: ['jutro'] });
   assert.deepEqual(roster.shiftsWorked(waiter, MON), []);
 });
+
+// ── coverableShifts (ticket 04) ──────────────────────────────────────────────
+//
+// Regression: the request screen used to offer a shift the business does not run
+// that day. On the special weekday (opening-only) only the first shift runs, so
+// the mid and afternoon shifts must never be offered as coverable there.
+
+test('coverableShifts on an opening-only day offers only the shift that runs', () => {
+  const waiter = { id: 'w1', pattern: { m: [0, 0, 0, 0, 0, 0, 0], s: [], a: [] }, vacations: [] };
+  const roster = createRoster({
+    enabledShifts: ['jutro', 'međusmjena', 'popodne'],
+    openingPolicy: { weekday: { 6: OPENING_ONLY } }, // Sundays: opening-only
+  });
+  // The waiter works nothing that Sunday, but only morning runs — so morning is
+  // the only shift they could cover; mid and afternoon are never offered.
+  assert.deepEqual(roster.coverableShifts(waiter, SUN), ['jutro']);
+});
+
+test('the special-weekday policy is what removes mid/afternoon from a Sunday offer', () => {
+  // Regression contrast, at the seam the fix turns on. With a full policy the
+  // shifts that don't run Sunday still fall through as coverable — the shape of
+  // the old bug. Marking Sunday opening-only is exactly what closes it.
+  const waiter = { id: 'w1', pattern: { m: [0, 0, 0, 0, 0, 0, 0], s: [], a: [] }, vacations: [] };
+  const enabledShifts = ['jutro', 'međusmjena', 'popodne'];
+  const full = createRoster({ enabledShifts, openingPolicy: {} });
+  const special = createRoster({ enabledShifts, openingPolicy: { weekday: { 6: OPENING_ONLY } } });
+  assert.deepEqual(full.coverableShifts(waiter, SUN), ['jutro', 'međusmjena', 'popodne']);
+  assert.deepEqual(special.coverableShifts(waiter, SUN), ['jutro']);
+});
+
+test('coverableShifts excludes the shifts the waiter already works', () => {
+  const waiter = {
+    id: 'w1',
+    pattern: { m: [1, 0, 0, 0, 0, 0, 0], s: [0, 0, 0, 0, 0, 0], a: [0, 0, 0, 0, 0, 0] },
+    vacations: [],
+  };
+  const roster = createRoster({ enabledShifts: ['jutro', 'međusmjena', 'popodne'] });
+  // Monday runs full; the waiter works morning, so they could cover the other two.
+  assert.deepEqual(roster.coverableShifts(waiter, MON), ['međusmjena', 'popodne']);
+});
+
+test('coverableShifts is empty on a closed day', () => {
+  const waiter = { id: 'w1', pattern: { m: [0, 0, 0, 0, 0, 0, 0], s: [], a: [] }, vacations: [] };
+  const roster = createRoster({
+    enabledShifts: ['jutro', 'međusmjena', 'popodne'],
+    openingPolicy: { overrides: { [MON]: OPENING_CLOSED } },
+  });
+  assert.deepEqual(roster.coverableShifts(waiter, MON), []);
+});
+
+// ── standing (ticket 04) ─────────────────────────────────────────────────────
+
+test('standing returns the request against a shift and its state, or null', () => {
+  const waiter = { id: 'w1', pattern: { m: [], s: [], a: [] }, vacations: [] };
+  const requests = [
+    { waiterId: 'w1', date: MON, shift: 'jutro', status: 'open' },
+    { waiterId: 'w1', date: SUN, shift: 'oboje', status: 'approved' },
+    { waiterId: 'w2', date: MON, shift: 'jutro', status: 'open' },
+  ];
+  const roster = createRoster({ requests });
+  assert.equal(roster.standing(waiter, MON, 'jutro')?.status, 'open');
+  // 'oboje' is the whole-day request and stands against any of that day's shifts.
+  assert.equal(roster.standing(waiter, SUN, 'popodne')?.status, 'approved');
+  assert.equal(roster.standing(waiter, MON, 'popodne'), null); // no request for it
+  assert.equal(roster.standing(waiter, '2026-09-20', 'jutro'), null); // other date
+  assert.equal(roster.standing(waiter, MON, 'jutro').waiterId, 'w1'); // not w2's
+});

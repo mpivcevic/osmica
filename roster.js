@@ -101,9 +101,26 @@ export function createRoster({
     return enabledShifts.filter(shift => worksShift(waiter, iso, shift));
   }
 
-  // The questions the waiter screens need — and only those. The opening-policy
-  // resolution, the running-shift list and the snapshot itself stay closed over
-  // as internals; the coverage questions that read the whole roster and the
-  // request list arrive with the tickets that need them, not before.
-  return { worksShift, onHoliday, shiftsWorked };
+  // The shifts this waiter could volunteer to cover on this date: the ones the
+  // business runs that day (opening policy + enabled list) that the waiter does
+  // not already work. A shift that does not run that day is never coverable — so
+  // the request screen can never offer it.
+  function coverableShifts(waiter, iso) {
+    return runningShifts(iso).filter(shift => !worksShift(waiter, iso, shift));
+  }
+
+  // The standing of a day-off request against one of a waiter's shifts: the
+  // request itself (whose .status is the state — open, pending_approval,
+  // approved) or null if there is none. A whole-day request ('oboje') stands
+  // against any of that day's shifts.
+  function standing(waiter, iso, shift) {
+    return requests.find(r =>
+      r.waiterId === waiter.id && r.date === iso && (r.shift === shift || r.shift === 'oboje')
+    ) || null;
+  }
+
+  // The questions the screens need. The opening-policy resolution and the
+  // running-shift list stay closed over as internals; the coverage questions
+  // that read the whole roster arrive with the tickets that need them.
+  return { worksShift, onHoliday, shiftsWorked, coverableShifts, standing };
 }
