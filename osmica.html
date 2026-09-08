@@ -1104,7 +1104,16 @@ details[open] .hours-chevron::before{content:'▴';}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script>
+<script type="module">
+// Pure date helpers live in their own module (dates.js) so the roster module
+// and the test runner can import them without loading the app. Moved unchanged
+// from the UTILS block below in ticket 02.
+import { isoDate, todayDate, getMonday, addDays, formatDate, dayOfWeek } from './dates.js';
+// The roster module owns the rules about who works what. Screens build one fresh
+// per render and ask it, instead of deriving eligibility by hand. See roster.js
+// and ADR-0001 (docs/adr/0001-opening-policy-precedence.md).
+import { createRoster, ALL_SHIFTS, OPENING_ONLY } from './roster.js';
+
 // ══════════════════════════════════════════════════════════
 // SUPABASE INIT
 // ══════════════════════════════════════════════════════════
@@ -2325,21 +2334,11 @@ async function logout() {
 // ══════════════════════════════════════════════════════════
 // UTILS
 // ══════════════════════════════════════════════════════════
-function isoDate(d) {
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
+// isoDate, todayDate, getMonday, addDays, formatDate and dayOfWeek moved to
+// dates.js in ticket 02 and are imported at the top of this module. today()
+// stays here and calls the imported isoDate.
 function today() { return isoDate(new Date()); }
-function todayDate() { return new Date(); }
 function initials(name) { return (name||'?').split(' ').map(p=>p[0]).join('').toUpperCase().slice(0,2); }
-function getMonday(d) {
-  const dt = new Date(d);
-  const day = dt.getDay();
-  dt.setDate(dt.getDate() + (day===0?-6:1-day));
-  dt.setHours(0,0,0,0);
-  return dt;
-}
-function addDays(d, n) { const r=new Date(d); r.setDate(r.getDate()+n); return r; }
-function formatDate(iso) { const [y,m,d]=iso.split('-'); return `${d}.${m}.${y}`; }
 function shiftLabel(s) {
   if (s==='jutro') return 'I Jutro';
   if (s==='međusmjena') return 'II Međusmjena';
@@ -2377,21 +2376,31 @@ function writeErrorMessage(error) {
 function waiterById(id) { return STATE.waiters.find(w=>w.id===id); }
 function isOwner() { return STATE.currentUser === 'owner'; }
 function currentWaiter() { return isOwner() ? null : STATE.currentUser; }
-function dayOfWeek(iso) { const d=new Date(iso+'T12:00:00'); const day=d.getDay(); return day===0?6:day-1; }
 
-function worksShift(waiter, iso, shift) {
-  if (isOnVacation(waiter, iso)) return false;
-  const override = STATE.dateSchedule[iso]?.[waiter.id];
-  if (override !== undefined) return override.includes(shift);
-  const dow = dayOfWeek(iso);
-  if (shift === 'jutro') return !!waiter.pattern.m[dow];
-  if (shift === 'međusmjena') return dow < 6 && !!(waiter.pattern.s||[])[dow];
-  if (shift === 'popodne') return dow < 6 && !!waiter.pattern.a[dow];
-  return false;
-}
+// dayOfWeek maps Sunday to 6 (weeks start Monday at 0).
+const SUNDAY = 6;
 
-function isOnVacation(waiter, iso) {
-  return (waiter.vacations||[]).some(v => v.from && v.to && iso >= v.from && iso <= v.to);
+// The opening policy in force by default: Sunday — the special weekday — runs
+// opening-only (just the first shift), every other day runs full. This is where
+// the shiftmaker starts; per-date closures are a generation-time concern and are
+// not represented here.
+const SPECIAL_WEEKDAY_POLICY = { weekday: { [SUNDAY]: OPENING_ONLY } };
+
+// A roster built from the current data snapshot, fresh on every call — there is
+// no cached instance. It carries the special-weekday opening policy, so the
+// screens see Sunday's opening-only rule. The waiter's own screens are
+// unaffected by that (mid and afternoon already have no Sunday pattern); the
+// request screen relies on it to stop offering a shift the business doesn't run.
+// The generated schedule is keyed by waiter id, holidays come off each waiter,
+// and the enabled shifts are the full three until the shift list is configurable.
+function buildRoster() {
+  return createRoster({
+    waiters: STATE.waiters,
+    requests: STATE.requests,
+    schedule: STATE.dateSchedule,
+    openingPolicy: SPECIAL_WEEKDAY_POLICY,
+    enabledShifts: ALL_SHIFTS,
+  });
 }
 
 function inviteUrl(token) {
@@ -2537,16 +2546,17 @@ function calcWaiterHours(waiter, targetY, targetM) {
   const m = targetM !== undefined ? targetM : now.getMonth();
   const todayIso = isoDate(now);
   const daysInMonth = new Date(y, m+1, 0).getDate();
+  // The roster owns "which shifts is this waiter actually on this date" —
+  // shiftsActive already subtracts approved days off and honours the opening
+  // policy, so an eight-hour shift is counted per active shift. A shift the
+  // opening policy does not run that day no longer counts, even if the generated
+  // schedule placed one there (ADR-0001 precedence).
+  const roster = buildRoster();
   let worked = 0, projected = 0;
   for (let day = 1; day <= daysInMonth; day++) {
     const d = new Date(y, m, day);
     const iso = isoDate(d);
-    let h = 0;
-    ['jutro','međusmjena','popodne'].forEach(shift => {
-      if (!worksShift(waiter, iso, shift)) return;
-      const off = STATE.requests.find(r=>r.waiterId===waiter.id&&r.date===iso&&r.status==='approved'&&(r.shift===shift||r.shift==='oboje'));
-      if (!off) h += 8;
-    });
+    const h = roster.shiftsActive(waiter, iso).length * 8;
     if (iso <= todayIso) worked += h; else projected += h;
   }
   return {worked, total: worked + projected};
@@ -2570,13 +2580,19 @@ function renderOwnerHome() {
       <span style="color:var(--text-3);">→</span>
     </div>` : '';
 
+  // Staffing gaps come from the roster, the same coverage question the week view
+  // and the day detail read. A gap is a shift that runs that day (opening policy)
+  // but whose active count is 0 — coverageCount returns null for a shift that does
+  // not run, so those are never flagged. This subtracts approved days off, which
+  // the old hand-written count here did not: a shift covered only by someone given
+  // the day off now reads as a gap here, agreeing with the day detail sheet.
+  const roster = buildRoster();
   const gapRows = [];
   for (let i = 0; i < 14; i++) {
     const d = addDays(now, i);
     const iso = isoDate(d);
     const dow = dayOfWeek(iso);
-    const shiftsToCheck = dow===6 ? ['jutro'] : ['jutro','međusmjena','popodne'];
-    const empty = shiftsToCheck.filter(s => STATE.waiters.filter(w=>worksShift(w,iso,s)).length === 0);
+    const empty = ALL_SHIFTS.filter(s => roster.coverageCount(iso, s) === 0);
     if (empty.length) gapRows.push({iso, d, dow, empty});
   }
   const gapNums = {jutro:'I',međusmjena:'II',popodne:'III'};
@@ -2637,19 +2653,17 @@ function renderWeekStrip() {
   const strip = document.getElementById('week-strip');
   const mon = getMonday(todayDate());
   const todayIso = today();
+  const roster = buildRoster();
+  const w = currentWaiter();
+  const SHIFT_NUMERAL = { jutro:'I', 'međusmjena':'II', popodne:'III' };
   let html = '';
   for (let i = 0; i < 7; i++) {
     const d = addDays(mon, i);
     const iso = isoDate(d);
     const isToday = iso === todayIso;
-    const w = currentWaiter();
     let shiftTxt = '';
     if (w) {
-      const parts = [];
-      if (worksShift(w,iso,'jutro')) parts.push('I');
-      if (worksShift(w,iso,'međusmjena')) parts.push('II');
-      if (worksShift(w,iso,'popodne')) parts.push('III');
-      shiftTxt = parts.join('·');
+      shiftTxt = roster.shiftsWorked(w, iso).map(s => SHIFT_NUMERAL[s]).join('·');
     }
     const hasReq = STATE.requests.some(r=>r.date===iso&&r.status==='open');
     html += `<div class="day-chip${isToday?' today':''}${hasReq?' has-request':''}">
@@ -2665,15 +2679,15 @@ function renderMyShifts() {
   const list = document.getElementById('my-shifts-list');
   const w = currentWaiter();
   if (isOwner()||!w) { list.innerHTML=''; return; }
+  const roster = buildRoster();
   let html = '', count = 0;
   for (let i = 0; i < 14 && count < 5; i++) {
     const d = addDays(todayDate(), i);
     const iso = isoDate(d);
     const dow = dayOfWeek(iso);
-    ['jutro','međusmjena','popodne'].forEach(shift => {
+    roster.shiftsWorked(w, iso).forEach(shift => {
       if (count >= 5) return;
-      if (!worksShift(w, iso, shift)) return;
-      const req = STATE.requests.find(r=>r.waiterId===w.id&&r.date===iso&&(r.shift===shift||r.shift==='oboje'));
+      const req = roster.standing(w, iso, shift);
       let statusHtml = '<span class="shift-card-status status-ok">Potvrđeno</span>';
       if (req) {
         if (req.status==='open') statusHtml='<span class="shift-card-status status-pending">Zahtjev poslan</span>';
@@ -2731,6 +2745,7 @@ function renderReqCalendar() {
   const daysInMonth = new Date(y, m+1, 0).getDate();
   const todayIso = today();
   const w = currentWaiter();
+  const roster = buildRoster();
   let html = '';
   DAY_LABELS.forEach(l => { html += `<div class="cal-header">${l}</div>`; });
   for (let i = 0; i < startDow; i++) html += '<div class="cal-day empty"></div>';
@@ -2740,7 +2755,7 @@ function renderReqCalendar() {
     const isSelected = iso === reqSelectedDate;
     const isTod = iso === todayIso;
     const hasReq = STATE.requests.some(r=>r.waiterId===w?.id&&r.date===iso&&r.status!=='approved');
-    const worksDay = w && (['jutro','međusmjena','popodne'].some(s=>worksShift(w,iso,s)));
+    const worksDay = w && roster.shiftsWorked(w, iso).length > 0;
     let cls = 'cal-day';
     if (isPast) cls += ' past';
     else if (!worksDay) cls += ' off-day';
@@ -2760,10 +2775,10 @@ function renderReqShiftSection() {
   const section = document.getElementById('req-shift-section');
   const canPicker = document.getElementById('req-can-cover-picker');
   if (!reqSelectedDate || !w) { section.style.display = 'none'; return; }
-  const allShifts = ['jutro', 'međusmjena', 'popodne'];
-  const dow = dayOfWeek(reqSelectedDate);
-  const myShifts = allShifts.filter(s => !(s === 'popodne' && dow === 6) && worksShift(w, reqSelectedDate, s));
-  const otherShifts = allShifts.filter(s => !(s === 'popodne' && dow === 6) && !myShifts.includes(s));
+  // Only shifts the business runs that day, minus the ones the waiter works —
+  // the roster's coverableShifts, not a hand filter. A shift that does not run
+  // that day (mid or afternoon on the special weekday) is never offered.
+  const otherShifts = buildRoster().coverableShifts(w, reqSelectedDate);
   if (otherShifts.length === 0) { section.style.display = 'none'; return; }
   const shiftIcon = s => s === 'jutro' ? 'I' : s === 'međusmjena' ? 'II' : 'III';
   const shiftName = s => s === 'jutro' ? 'Jutro' : s === 'međusmjena' ? 'Međusmjena' : 'Popodne';
@@ -2786,8 +2801,7 @@ async function submitRequest() {
   const note = document.getElementById('req-note').value.trim();
   const btn = document.getElementById('btn-submit-request');
   btn.disabled = true;
-  const allShifts = ['jutro', 'međusmjena', 'popodne'];
-  const myShifts = allShifts.filter(s => worksShift(w, reqSelectedDate, s));
+  const myShifts = buildRoster().shiftsWorked(w, reqSelectedDate);
   const shift = myShifts.length === 1 ? myShifts[0] : 'oboje';
   const canArr = [...reqCanCover];
   const shiftName = s => s === 'jutro' ? 'Jutro' : s === 'međusmjena' ? 'Međusmjena' : 'Popodne';
@@ -3025,26 +3039,28 @@ function renderWeekView() {
   });
   html += '</div>';
 
-  ['jutro','međusmjena','popodne'].forEach(shift => {
+  // Coverage comes from the roster — the same questions the owner home and day
+  // detail read. activeStaff is null for a shift that does not run that day under
+  // the opening policy (the special weekday's mid/afternoon), which is what draws
+  // the "—" cell; otherwise it is the staff actively covering, and openRequests
+  // are the open day-off requests that flag the cell as a gap.
+  const roster = buildRoster();
+  ALL_SHIFTS.forEach(shift => {
     const rowLabel = shift==='jutro'?'I':shift==='međusmjena'?'II':'III';
     html += `<div class="week-row"><div class="week-row-label">${rowLabel}</div>`;
-    isodays.forEach((iso,di) => {
-      const dow = dayOfWeek(iso);
-      const isSundayAft = dow===6&&(shift==='popodne'||shift==='međusmjena');
+    isodays.forEach(iso => {
       const isT = iso===todayIso;
+      const active = roster.activeStaff(iso, shift);
       let cellContent = '', hasGap = false;
-      if (!isSundayAft) {
-        const workers = STATE.waiters.filter(w=>worksShift(w,iso,shift));
-        const offIds = STATE.requests.filter(r=>r.date===iso&&(r.shift===shift||r.shift==='oboje')&&r.status==='approved').map(r=>r.waiterId);
-        const active = workers.filter(w=>!offIds.includes(w.id));
-        const pending = STATE.requests.filter(r=>r.date===iso&&(r.shift===shift||r.shift==='oboje')&&r.status==='open');
+      if (active === null) {
+        cellContent = `<div style="color:var(--text-3);font-size:10px;text-align:center;padding:4px;">—</div>`;
+      } else {
         active.forEach(w => {
           const isMe = cw && w.id===cw.id;
           cellContent += `<div class="person-chip" style="background:${w.color};${(!isOwner()&&!isMe)?'opacity:0.28;':''}">${initials(w.name)}</div>`;
         });
-        if (pending.length) { hasGap=true; pending.forEach(r=>{ const w=waiterById(r.waiterId); cellContent+=`<div class="gap-chip">! ${w?.name.split(' ')[0]||'?'}</div>`; }); }
-      } else {
-        cellContent = `<div style="color:var(--text-3);font-size:10px;text-align:center;padding:4px;">—</div>`;
+        const openReqs = roster.openRequests(iso, shift);
+        if (openReqs.length) { hasGap=true; openReqs.forEach(r=>{ const w=waiterById(r.waiterId); cellContent+=`<div class="gap-chip">! ${w?.name.split(' ')[0]||'?'}</div>`; }); }
       }
       html += `<div class="week-cell${isT?' today-col':''}${hasGap?' gap':''}">${cellContent}</div>`;
     });
@@ -3076,6 +3092,11 @@ function renderMonthView() {
   if (isOwner()) { renderOwnerMonthView(y, m, todayIso); return; }
   const w = currentWaiter();
   if (!w) { document.getElementById('month-calendar').innerHTML=''; return; }
+  // Which shifts the waiter is actually on each day comes from the roster, so an
+  // approved day off clears the cell the same way the other screens honour it. The
+  // old grid cleared absence by hand and had two bugs the roster does not: it never
+  // cleared the mid shift, and it found only the first approved request on a date.
+  const roster = buildRoster();
   const firstDay = new Date(y,m,1);
   const startDow = firstDay.getDay()===0 ? 6 : firstDay.getDay()-1;
   const daysInMonth = new Date(y,m+1,0).getDate();
@@ -3085,13 +3106,11 @@ function renderMonthView() {
   for (let d = 1; d <= daysInMonth; d++) {
     const iso = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const isPast = iso < todayIso, isToday = iso === todayIso;
-    const approvedOff = STATE.requests.find(r=>r.waiterId===w.id&&r.date===iso&&r.status==='approved');
+    // The pending dot is an in-flight indicator, not absence: an open or awaiting
+    // request marks the day, but only an approved day off clears a shift (above).
     const pendingReq = STATE.requests.find(r=>r.waiterId===w.id&&r.date===iso&&(r.status==='open'||r.status==='pending_approval'));
-    let worksM = worksShift(w,iso,'jutro'), worksA = worksShift(w,iso,'popodne'), worksS = worksShift(w,iso,'međusmjena');
-    if (approvedOff) {
-      if (approvedOff.shift==='jutro'||approvedOff.shift==='oboje') worksM=false;
-      if (approvedOff.shift==='popodne'||approvedOff.shift==='oboje') worksA=false;
-    }
+    const active = roster.shiftsActive(w, iso);
+    const worksM = active.includes('jutro'), worksS = active.includes('međusmjena'), worksA = active.includes('popodne');
     const dow = dayOfWeek(iso);
     const isWeekend = dow>=5;
     const cellBg = isWeekend ? 'var(--month-weekend)' : 'var(--surface)';
@@ -3115,26 +3134,28 @@ function renderMonthView() {
 }
 
 function renderOwnerMonthView(y, m, todayIso) {
+  // Coverage per shift comes from the roster — the same coverageCount the home,
+  // week and day-detail views read since ticket 05 — so the month grid can never
+  // contradict them. A shift that does not run that day answers null and its
+  // segment is skipped, which resolves the special day through the opening policy
+  // instead of the old isSun hard-code; the count also subtracts an approved day
+  // off, which the hand-written pattern tally here never did.
+  const roster = buildRoster();
   const firstDay = new Date(y,m,1);
   const startDow = firstDay.getDay()===0 ? 6 : firstDay.getDay()-1;
   const daysInMonth = new Date(y,m+1,0).getDate();
   const covCol = n => n===0?'var(--danger)':n===1?'#eab308':'var(--success)';
+  const seg = c => c===null?'':`<div style="flex:1;height:3px;border-radius:1px;background:${covCol(c)};"></div>`;
   let html = '<div class="calendar-grid">';
   DAY_LABELS.forEach(l => { html += `<div class="cal-header">${l}</div>`; });
   for (let i = 0; i < startDow; i++) html += '<div class="cal-day empty"></div>';
   for (let d = 1; d <= daysInMonth; d++) {
     const iso = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const isToday=iso===todayIso, isPast=iso<todayIso;
-    const dow=dayOfWeek(iso), isSun=dow===6, isWeekend=dow>=5;
+    const dow=dayOfWeek(iso), isWeekend=dow>=5;
     const cellBg=isWeekend?'var(--month-weekend)':'var(--surface)';
     const opacity=isPast&&!isToday?'opacity:0.55;':'';
-    const cI=STATE.waiters.filter(w=>worksShift(w,iso,'jutro')).length;
-    const cII=isSun?null:STATE.waiters.filter(w=>worksShift(w,iso,'međusmjena')).length;
-    const cIII=isSun?null:STATE.waiters.filter(w=>worksShift(w,iso,'popodne')).length;
-    const seg1=`<div style="flex:1;height:3px;border-radius:1px;background:${covCol(cI)};"></div>`;
-    const seg2=cII!==null?`<div style="flex:1;height:3px;border-radius:1px;background:${covCol(cII)};"></div>`:'';
-    const seg3=cIII!==null?`<div style="flex:1;height:3px;border-radius:1px;background:${covCol(cIII)};"></div>`:'';
-    const bar=`<div style="display:flex;gap:1px;width:80%;flex-shrink:0;">${seg1}${seg2}${seg3}</div>`;
+    const bar=`<div style="display:flex;gap:1px;width:80%;flex-shrink:0;">${seg(roster.coverageCount(iso,'jutro'))}${seg(roster.coverageCount(iso,'međusmjena'))}${seg(roster.coverageCount(iso,'popodne'))}</div>`;
     let cls='cal-day'; if(isToday) cls+=' today'; else if(isPast) cls+=' past';
     html+=`<div class="${cls}" style="background:${cellBg};${opacity}flex-direction:column;gap:2px;cursor:pointer;" data-iso="${iso}">${d}${bar}</div>`;
   }
@@ -3154,7 +3175,11 @@ function renderOwnerMonthView(y, m, todayIso) {
 function openDayDetail(iso) {
   const d = new Date(iso+'T12:00:00');
   const dow = dayOfWeek(iso);
-  const isSun = dow===6;
+  // Which shifts run and who covers them both come from the roster, so the sheet
+  // agrees with the home and week views. A shift the business does not run that
+  // day resolves through the opening policy (activeStaff is null) and is skipped —
+  // replacing the old hard-coded "the special day means morning only" rule.
+  const roster = buildRoster();
   document.getElementById('day-detail-title').textContent = `${DAY_LABELS_FULL[dow]}, ${d.getDate()}. ${MONTH_NAMES[d.getMonth()]}`;
   const SHIFTS = [
     {key:'jutro',num:'I',time:'06:00–14:00',bg:'var(--shift-i-light)',col:'var(--shift-i)'},
@@ -3163,10 +3188,8 @@ function openDayDetail(iso) {
   ];
   let body = '';
   SHIFTS.forEach(s => {
-    if (isSun && s.key!=='jutro') return;
-    const workers = STATE.waiters.filter(w=>worksShift(w,iso,s.key));
-    const approved = STATE.requests.filter(r=>r.date===iso&&(r.shift===s.key||r.shift==='oboje')&&r.status==='approved').map(r=>r.waiterId);
-    const active = workers.filter(w=>!approved.includes(w.id));
+    const active = roster.activeStaff(iso, s.key);
+    if (active === null) return; // the business does not run this shift that day
     const names = active.map(w=>w.name.split(' ')[0]).join(', ')||'—';
     const pillCol = active.length===0?'var(--danger)':active.length===1?'var(--warn)':'var(--success)';
     body += `<div class="day-detail-row">
@@ -3554,7 +3577,7 @@ function openShiftmakerModal() {
   smShifts={jutro:{enabled:true,min:2},međusmjena:{enabled:true,min:2},popodne:{enabled:true,min:2}};
   smSundayDefault='morning'; smSundayOverrides={}; smWeeks=4; smMode='weeks'; smMonthOffset=1; smDays={}; smPrefs={};
   STATE.waiters.forEach(w=>{smDays[w.id]=6;smPrefs[w.id]='auto';});
-  ['jutro','međusmjena','popodne'].forEach(s=>{
+  ALL_SHIFTS.forEach(s=>{
     document.getElementById(`sm-min-${s}`).textContent=smShifts[s].min;
     const chk=document.querySelector(`.sm-shift-check[data-shift="${s}"]`); if(chk) chk.checked=true;
     document.getElementById(`sm-row-${s}`).classList.remove('sm-disabled');
@@ -3579,7 +3602,7 @@ function renderSmWaiterList() {
         <span class="sm-label">d/tjed</span>
       </div>
       <div class="sm-pref" id="sm-pref-${w.id}">
-        ${['auto','jutro','međusmjena','popodne'].map(p=>`<button class="sm-pref-btn${smPrefs[w.id]===p?' active':''}" data-wid="${w.id}" data-pref="${p}">${p==='auto'?'Auto':p==='jutro'?'I':p==='međusmjena'?'II':'III'}</button>`).join('')}
+        ${['auto', ...ALL_SHIFTS].map(p=>`<button class="sm-pref-btn${smPrefs[w.id]===p?' active':''}" data-wid="${w.id}" data-pref="${p}">${p==='auto'?'Auto':p==='jutro'?'I':p==='međusmjena'?'II':'III'}</button>`).join('')}
       </div>
     </div>`).join('');
   list.querySelectorAll('.sm-stepper-btn[data-wid]').forEach(btn=>{
@@ -3618,7 +3641,10 @@ function assignShiftsForDay(workers, shiftsThisDay, waiterPref) {
 }
 
 async function generateSchedule() {
-  const enabledShifts = ['jutro','međusmjena','popodne'].filter(s=>smShifts[s].enabled);
+  const enabledShifts = ALL_SHIFTS.filter(s=>smShifts[s].enabled);
+  // The roster answers only the holiday question here; the generator keeps its
+  // own generation-time Sunday policy (ADR-0001 says that stays out of the roster).
+  const roster = buildRoster();
   const now = todayDate();
   let startDate, endDate;
   if (smMode==='month') { startDate=new Date(now.getFullYear(),now.getMonth()+smMonthOffset,1); endDate=new Date(startDate.getFullYear(),startDate.getMonth()+1,0); }
@@ -3644,10 +3670,10 @@ async function generateSchedule() {
     const weekAssignments={};
     STATE.waiters.forEach(w=>{
       const days=smDays[w.id]||0;
-      const available=[0,1,2,3,4,5].filter(dow2=>{const dd=addDays(weekStart,dow2);return !isOnVacation(w,isoDate(dd));}).sort(()=>Math.random()-0.5);
+      const available=[0,1,2,3,4,5].filter(dow2=>{const dd=addDays(weekStart,dow2);return !roster.onHoliday(w,isoDate(dd));}).sort(()=>Math.random()-0.5);
       const assigned=new Set(available.slice(0,Math.min(days,available.length)));
       const sunIso=isoDate(addDays(weekStart,6));
-      if ((smSundayOverrides[sunIso]||smSundayDefault)!=='closed'&&days>6&&!isOnVacation(w,sunIso)) assigned.add(6);
+      if ((smSundayOverrides[sunIso]||smSundayDefault)!=='closed'&&days>6&&!roster.onHoliday(w,sunIso)) assigned.add(6);
       weekAssignments[w.id]=assigned;
     });
     for (let dow=0;dow<7;dow++) {
@@ -3657,7 +3683,9 @@ async function generateSchedule() {
       const isSun=dow===6;
       const sundayMode=smSundayOverrides[iso2]||smSundayDefault;
       if (isSun&&sundayMode==='closed') continue;
-      const shiftsThisDay=isSun&&sundayMode==='morning'?['jutro']:enabledShifts;
+      // A morning-only Sunday runs just the first enabled shift — the same
+      // opening-only rule the roster applies (roster.js runningShifts, OPENING_ONLY).
+      const shiftsThisDay=isSun&&sundayMode==='morning'?enabledShifts.slice(0,1):enabledShifts;
       let workers=STATE.waiters.filter(w=>weekAssignments[w.id].has(dow));
       const minNeeded=shiftsThisDay.reduce((s,sh)=>s+smShifts[sh].min,0);
       if (workers.length<minNeeded) {
