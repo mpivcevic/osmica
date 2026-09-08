@@ -40,19 +40,35 @@ the weekly pattern, a stale generated row — or a standing weekly pattern — c
 resurrect a shift the business has stopped running. This is the property the owner
 cares about, and it is why the opening policy is the first gate rather than the last.
 
-## Realization status (as of 2026-09-07, roster module tickets 03–08)
+## Realization status (as of 2026-09-08, roster module ticket 09 — reachable)
 
-The precedence above is **in force inside the roster**, but the application does not
-yet exercise its variable part. `buildRoster` supplies a fixed special-weekday policy
-(`SPECIAL_WEEKDAY_POLICY` — every Sunday opening-only, no per-date overrides), because
-the only owner-facing opening control today is the shiftmaker's throwaway,
-generation-time Sunday settings, which are never persisted or read at display time.
+The precedence above is **in force inside the roster and now reachable through the
+app.** Ticket 09 persisted the opening policy (and the enabled shifts and special
+weekday) per café in `cafes.business_config` (migration 023). `buildRoster` feeds the
+roster the *stored* policy — the frozen `SPECIAL_WEEKDAY_POLICY` constant and the
+hard-coded `enabledShifts: ALL_SHIFTS` are gone — and the shiftmaker generates against
+the same stored policy (it asks `roster.runningShifts(iso)` rather than resolving a
+second copy), so generation and display can never disagree.
 
-So the owner-facing capability this ADR describes — closing (or fully opening) a day
-*after* generation and having every screen honour it at once — is **latent, not yet
-reachable through the UI**. Two consequences follow directly from the fixed constant:
-a day configured and generated as *full* still renders as opening-only (the generated
-rows are suppressed by the first gate), and a *closed* day can only be expressed the
-old way, by the generator baking empty rows. Persisting the opening policy and feeding
-it to `buildRoster` — tracked as ticket 09 (`.scratch/roster-module/issues/09-persist-opening-policy.md`)
-— is what makes this capability real; update this note when it lands.
+The owner-facing capability this ADR describes — closing (or fully opening) a day
+*after* generation and having every screen honour it at once — is **live**. The owner
+sets the default special-weekday mode, per-date exceptions (a calendar, plus a
+"close every special day this month" bulk action) and the enabled shifts on the
+Radno vrijeme settings screen (Admin → Postavke); the settings save on their own,
+independent of ever generating a schedule, so the reload-loses-it wart is gone. The
+two consequences of the old fixed constant are fixed and pinned by named regressions
+(`roster.test.js`, "ticket 09"): a day configured and generated as *full* now renders
+every shift on every screen (it no longer suppresses past the first), and a *closed*
+day empties the display live without regenerating — the generated rows are gated by
+the first gate, never deleted.
+
+### History
+
+Before ticket 09 (roster module tickets 03–08, as of 2026-09-07) the precedence was in
+force inside the roster but the application did not exercise its variable part:
+`buildRoster` supplied a fixed special-weekday policy (`SPECIAL_WEEKDAY_POLICY` — every
+Sunday opening-only, no per-date overrides), because the only owner-facing opening
+control was the shiftmaker's throwaway, generation-time Sunday settings, never
+persisted or read at display time. The capability was **latent** — a *full* day
+rendered as opening-only (its generated rows suppressed by the first gate) and a
+*closed* day could only be expressed the old way, by the generator baking empty rows.

@@ -184,11 +184,13 @@ export function createRoster({
     );
   }
 
-  // The questions the screens need. The opening-policy resolution and the
-  // running-shift list stay closed over as internals; the coverage questions read
-  // the whole roster.
+  // The questions the screens need. `runningShifts` is exposed because the
+  // schedule generator is now a consumer too: it asks the roster which shifts a
+  // date runs rather than resolving the opening policy a second time, so
+  // generation and display can never disagree about a date. `openingMode` stays
+  // an internal of that answer. The coverage questions read the whole roster.
   return {
     worksShift, onHoliday, shiftsWorked, shiftsActive, coverableShifts, standing,
-    activeStaff, coverageCount, openRequests,
+    activeStaff, coverageCount, openRequests, runningShifts,
   };
 }

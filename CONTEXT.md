@@ -42,9 +42,11 @@ opening policy gives that date's _running shifts_.
 _Avoid_: active shifts ("active" is a per-waiter, per-date word — see Coverage)
 
 **Special weekday**:
-A weekday the opening policy singles out from the plain Monday–Saturday default —
-currently Sunday, which runs opening-only. Named for the role, not the day,
-because the day is configuration.
+A weekday the opening policy singles out from the plain Monday–Saturday default.
+Named for the role, not the day, because the day *is* configuration: it is stored
+per café in `business_config` (coffee shop → Sunday, restaurant → Monday, retail →
+Sunday by default) and the owner changes it, its default mode and per-date
+exceptions on the Radno vrijeme settings screen.
 _Avoid_: Sunday, weekend
 
 **Coverage**:
