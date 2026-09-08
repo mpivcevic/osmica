@@ -18,10 +18,17 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
 -- ── Tables ────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS public.cafes (
-  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name        text NOT NULL,
-  owner_id    uuid REFERENCES auth.users(id) ON DELETE CASCADE,
-  created_at  timestamptz NOT NULL DEFAULT now()
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name            text NOT NULL,
+  owner_id        uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+  -- The business configuration (roster module, ticket 09 / migration 023): the
+  -- business type, the special weekday, the opening policy and the enabled
+  -- shifts, in roster-canonical vocabulary. Default = today's coffee-shop
+  -- behaviour so an existing row keeps its shape. On an already-created dev DB
+  -- the column is added by dev/023 instead (this CREATE never alters).
+  business_config jsonb NOT NULL DEFAULT
+    '{"type":"coffee","specialWeekday":6,"policy":{"weekday":{"6":"opening-only"},"overrides":{}},"enabledShifts":["jutro","međusmjena","popodne"]}'::jsonb,
+  created_at      timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS public.waiters (

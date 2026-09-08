@@ -510,3 +510,72 @@ test('a whole-day approved request clears every shift from shiftsActive', () => 
   const roster = createRoster({ requests, enabledShifts: ['jutro', 'međusmjena', 'popodne'] });
   assert.deepEqual(roster.shiftsActive(waiter, MON), []);
 });
+
+// ── Ticket 09: the opening policy is now stored, and generation and display read
+//    the same copy of it. These pin the two ADR-0001 properties the app could not
+//    reach while buildRoster fed a frozen SPECIAL_WEEKDAY_POLICY constant. ─────────
+
+// The proven full-special-day suppression bug, pinned. A Sunday the owner
+// configured and generated as *full* has all its rows in the schedule, but the
+// old frozen policy (Sunday = opening-only, no overrides) suppressed every shift
+// past the first on display. This test both reproduces that suppression under the
+// frozen policy and shows the stored override policy fixes it — the assertion is
+// the exact contrast from the ticket, confirmed failing against the pre-fix
+// constant on the first line and correct on the second.
+test('ticket 09: a full special day renders every generated shift, not only the opening one', () => {
+  const { waiter, schedule } = scheduledWaiter('w1', SUN, ['jutro', 'popodne']);
+  const enabledShifts = ['jutro', 'međusmjena', 'popodne'];
+
+  // The pre-fix constant buildRoster used to pass: every Sunday opening-only, no
+  // overrides. The afternoon row the generator wrote is hidden by the first gate.
+  const frozen = createRoster({
+    schedule, enabledShifts,
+    openingPolicy: { weekday: { 6: OPENING_ONLY } },
+  });
+  assert.deepEqual(frozen.shiftsWorked(waiter, SUN), ['jutro']); // the bug: afternoon suppressed
+
+  // The stored policy this ticket makes reachable: the same weekday default, plus
+  // a per-date override marking this Sunday full. Now the afternoon row shows.
+  const stored = createRoster({
+    schedule, enabledShifts,
+    openingPolicy: { weekday: { 6: OPENING_ONLY }, overrides: { [SUN]: OPENING_FULL } },
+  });
+  assert.deepEqual(stored.shiftsWorked(waiter, SUN), ['jutro', 'popodne']); // fixed
+});
+
+// The ADR-0001 "close a day and every screen honours it at once" property, now
+// reachable: a stored closed override empties the coverage the display reads,
+// independent of whether the schedule was regenerated (the rows are still there).
+test('ticket 09: a stored closed override hides staff live, without regenerating', () => {
+  const waiters = [{ id: 'w1', pattern: { m: [], s: [], a: [] }, vacations: [] }];
+  const schedule = { [SUN]: { w1: ['jutro', 'međusmjena', 'popodne'] } };
+  const enabledShifts = ['jutro', 'međusmjena', 'popodne'];
+
+  const open = createRoster({ waiters, schedule, enabledShifts, openingPolicy: {} });
+  assert.equal(open.coverageCount(SUN, 'jutro'), 1); // rows staff the day…
+
+  const closed = createRoster({
+    waiters, schedule, enabledShifts,
+    openingPolicy: { overrides: { [SUN]: OPENING_CLOSED } },
+  });
+  // …but a stored closure empties every shift, without the rows being deleted.
+  assert.equal(closed.coverageCount(SUN, 'jutro'), null);
+  assert.deepEqual(closed.shiftsWorked(waiters[0], SUN), []);
+});
+
+// runningShifts is the roster answer the generator now shares with display, so the
+// two resolve one policy. It returns the running shifts in order, or [] for closed.
+test('ticket 09: runningShifts resolves the policy the generator and display share', () => {
+  const enabledShifts = ['jutro', 'međusmjena', 'popodne'];
+  const roster = createRoster({
+    enabledShifts,
+    openingPolicy: {
+      weekday: { 6: OPENING_ONLY },
+      overrides: { '2026-09-06': OPENING_CLOSED, [SUN]: OPENING_FULL },
+    },
+  });
+  assert.deepEqual(roster.runningShifts(MON), enabledShifts);          // ordinary day → full
+  assert.deepEqual(roster.runningShifts('2026-09-20'), ['jutro']);     // a plain Sunday → opening-only
+  assert.deepEqual(roster.runningShifts(SUN), enabledShifts);          // override → full
+  assert.deepEqual(roster.runningShifts('2026-09-06'), []);            // override → closed
+});

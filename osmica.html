@@ -187,29 +187,15 @@ details[open] .hours-chevron::before{content:'▴';}
 .owner-hours-nums{font-size:11px;color:var(--text-2);width:68px;text-align:right;flex-shrink:0;font-variant-numeric:tabular-nums;white-space:nowrap;}
 .owner-hours-proj{color:var(--text-3);}
 .btn-whatsapp{background:#25D366;color:#fff;border:none;border-radius:var(--radius-sm);padding:9px 14px;font-size:13px;font-weight:600;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:6px;touch-action:manipulation;cursor:pointer;}
-.sm-sunday-selector{display:flex;gap:3px;flex:1;}
-.sm-sunday-btn{flex:1;padding:5px 4px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);font-size:10px;font-weight:600;color:var(--text-2);touch-action:manipulation;text-align:center;line-height:1.3;}
-.sm-sunday-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
 .sm-mode-selector{display:flex;gap:3px;margin-bottom:6px;}
 .sm-mode-btn{flex:1;padding:5px 4px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);font-size:11px;font-weight:600;color:var(--text-2);touch-action:manipulation;text-align:center;}
 .sm-mode-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
 .sm-stepper-val-wide{font-size:12px;font-weight:700;color:var(--text);min-width:90px;text-align:center;}
-.btn-sunday-open{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 10px;font-size:12px;font-weight:600;color:var(--text-2);touch-action:manipulation;cursor:pointer;flex-shrink:0;}
-.sm-sunday-default-wrap{margin-bottom:14px;}
-.sm-sunday-default-label{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3);margin-bottom:6px;}
-.sm-sunday-default-sel{display:flex;gap:4px;}
-.sm-sunday-default-sel .sm-sunday-btn{flex:1;padding:8px 4px;font-size:11px;}
 .sm-generiraj-block{margin-bottom:14px;}
 .sm-generiraj-label{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3);margin-bottom:6px;}
 .sm-generiraj-stepper{display:flex;align-items:center;justify-content:center;gap:10px;padding:8px 0;}
 .sm-generiraj-stepper .sm-stepper-btn{width:30px;height:30px;}
 .sm-generiraj-val{font-size:14px;font-weight:700;color:var(--text);min-width:90px;text-align:center;}
-.sunday-item{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);}
-.sunday-item:last-child{border-bottom:none;}
-.sunday-item-date{font-size:13px;color:var(--text);font-weight:500;}
-.sunday-item-sel{display:flex;gap:3px;}
-.sunday-item-btn{padding:4px 7px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);font-size:10px;font-weight:600;color:var(--text-2);touch-action:manipulation;}
-.sunday-item-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
 .vacation-list-wrap{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:0 12px;margin-bottom:8px;min-height:20px;}
 .vacation-item{display:flex;align-items:center;gap:6px;padding:7px 0;border-bottom:1px solid var(--border);}
 .vacation-item:last-child{border-bottom:none;}
@@ -246,12 +232,9 @@ details[open] .hours-chevron::before{content:'▴';}
 .sm-shifts-card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;margin-bottom:10px;}
 .sm-shift-row{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-bottom:1px solid var(--border);}
 .sm-shift-row:last-child{border-bottom:none;}
-.sm-shift-row.sm-disabled{opacity:0.38;}
 .sm-shift-toggle-wrap{display:flex;align-items:center;gap:8px;cursor:pointer;}
-.sm-shift-check{width:16px;height:16px;accent-color:var(--accent);flex-shrink:0;cursor:pointer;}
+.sm-shift-check,.wh-shift-check{width:16px;height:16px;accent-color:var(--accent);flex-shrink:0;cursor:pointer;}
 .sm-shift-name{font-size:13px;font-weight:500;color:var(--text);}
-.sm-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);margin-bottom:14px;}
-.sm-toggle-label{font-size:13px;color:var(--text);}
 
 /* ── DAY DETAIL SHEET ─────────────────────────────────── */
 .day-detail-row{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);}
@@ -411,6 +394,9 @@ details[open] .hours-chevron::before{content:'▴';}
 .cal-day.has-request{background:var(--warn-light);}
 .cal-day.off-day{color:var(--text-3);pointer-events:none;opacity:0.4;}
 .cal-dot{position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--warn);}
+.cal-day.wh-only{background:var(--warn-light);color:var(--text);}
+.cal-day.wh-closed{background:rgba(220,72,72,0.18);color:var(--text);}
+.cal-day.wh-override{box-shadow:inset 0 0 0 2px var(--accent);}
 .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
 .cal-nav-title{font-size:16px;font-weight:600;color:var(--text);}
 .cal-nav-btn{width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);background:var(--surface2);color:var(--text-2);font-size:16px;}
@@ -681,6 +667,13 @@ details[open] .hours-chevron::before{content:'▴';}
     <input class="form-input" id="setup-owner-name" type="text" placeholder="npr. Ivan Horvat"/>
     <label class="form-label">Telefon (WhatsApp, bez + ili 00)</label>
     <input class="form-input" id="setup-owner-phone" type="tel" placeholder="385911234567"/>
+    <label class="form-label">Vrsta lokala</label>
+    <div class="sm-mode-selector" id="setup-biztype-sel" style="margin-bottom:4px;">
+      <button type="button" class="sm-mode-btn active" data-biztype="coffee">Kafić</button>
+      <button type="button" class="sm-mode-btn" data-biztype="restaurant">Restoran</button>
+      <button type="button" class="sm-mode-btn" data-biztype="retail">Trgovina</button>
+    </div>
+    <div id="setup-biztype-hint" style="font-size:11px;color:var(--text-3);margin-bottom:14px;"></div>
     <button class="btn-primary" id="btn-setup-save">Kreiraj kafić →</button>
   </div>
 </div>
@@ -863,6 +856,10 @@ details[open] .hours-chevron::before{content:'▴';}
       </div>
       <div class="admin-section">
         <div class="section-label">Postavke</div>
+        <div class="logout-row" id="btn-work-hours" style="margin-bottom:8px;">
+          <span class="logout-label">Radno vrijeme</span>
+          <span>🕐</span>
+        </div>
         <div class="logout-row" id="btn-owner-profile" style="margin-bottom:8px;">
           <span class="logout-label">Profil vlasnika</span>
           <span>👤</span>
@@ -930,11 +927,10 @@ details[open] .hours-chevron::before{content:'▴';}
     <div class="modal-handle"></div>
     <div class="modal-title">Generator rasporeda</div>
     <div class="modal-sub">Konfiguriraj smjene i tim</div>
-    <label class="form-label" style="margin-top:12px;">Smjene</label>
+    <label class="form-label" style="margin-top:12px;">Min. po smjeni</label>
     <div class="sm-shifts-card">
       <div class="sm-shift-row" id="sm-row-jutro">
         <label class="sm-shift-toggle-wrap">
-          <input type="checkbox" class="sm-shift-check" data-shift="jutro" checked>
           <div class="shift-card-icon jutro" style="width:24px;height:24px;font-size:11px;border-radius:6px;">I</div>
           <span class="sm-shift-name">Jutro</span>
         </label>
@@ -947,7 +943,6 @@ details[open] .hours-chevron::before{content:'▴';}
       </div>
       <div class="sm-shift-row" id="sm-row-međusmjena">
         <label class="sm-shift-toggle-wrap">
-          <input type="checkbox" class="sm-shift-check" data-shift="međusmjena" checked>
           <div class="shift-card-icon međusmjena" style="width:24px;height:24px;font-size:11px;border-radius:6px;">II</div>
           <span class="sm-shift-name">Međusmjena</span>
         </label>
@@ -960,7 +955,6 @@ details[open] .hours-chevron::before{content:'▴';}
       </div>
       <div class="sm-shift-row" id="sm-row-popodne">
         <label class="sm-shift-toggle-wrap">
-          <input type="checkbox" class="sm-shift-check" data-shift="popodne" checked>
           <div class="shift-card-icon popodne" style="width:24px;height:24px;font-size:11px;border-radius:6px;">III</div>
           <span class="sm-shift-name">Popodne</span>
         </label>
@@ -972,11 +966,7 @@ details[open] .hours-chevron::before{content:'▴';}
         </div>
       </div>
     </div>
-    <div class="sm-toggle-row">
-      <span class="sm-toggle-label">Nedjelja</span>
-      <button class="btn-sunday-open" id="btn-open-sunday-settings">Postavi</button>
-    </div>
-    <div id="sm-sunday-summary" style="font-size:11px;color:var(--text-3);padding:0 4px 10px;margin-top:-10px;"></div>
+    <div id="sm-policy-note" style="font-size:11px;color:var(--text-3);padding:2px 4px 10px;"></div>
     <div class="sm-generiraj-block">
       <label class="form-label">Generiraj za</label>
       <div class="sm-mode-selector">
@@ -1044,25 +1034,6 @@ details[open] .hours-chevron::before{content:'▴';}
   </div>
 </div>
 
-<!-- ══ SUNDAY SETTINGS MODAL ══ -->
-<div class="modal-overlay" id="modal-sunday-settings">
-  <div class="modal">
-    <div class="modal-handle"></div>
-    <div class="modal-title">Nedjelje u periodu</div>
-    <div class="modal-sub">Postavi radno vrijeme za svaku nedjelju</div>
-    <div class="sm-sunday-default-wrap">
-      <div class="sm-sunday-default-label">Zadano za sve</div>
-      <div class="sm-sunday-default-sel" id="sm-sunday-default-sel">
-        <button class="sm-sunday-btn" data-mode="closed">Zatvoreno</button>
-        <button class="sm-sunday-btn active" data-mode="morning">Samo jutro</button>
-        <button class="sm-sunday-btn" data-mode="full">Cijeli dan</button>
-      </div>
-    </div>
-    <div id="sunday-list"></div>
-    <button class="btn-primary" id="btn-sunday-done" style="margin-top:14px;">Potvrdi</button>
-  </div>
-</div>
-
 <!-- ══ OWNER PROFILE MODAL ══ -->
 <div class="modal-overlay" id="modal-owner-profile">
   <div class="modal">
@@ -1076,6 +1047,52 @@ details[open] .hours-chevron::before{content:'▴';}
     <input class="form-input" id="owner-business-input" placeholder="npr. Caffe Bar Lipa" type="text"/>
     <button class="btn-primary" id="btn-save-owner-profile" style="margin-top:4px;">Spremi</button>
     <button class="btn-secondary" id="btn-cancel-owner-profile">Odustani</button>
+  </div>
+</div>
+
+<!-- ══ RADNO VRIJEME (business config) MODAL ══ -->
+<div class="modal-overlay" id="modal-work-hours">
+  <div class="modal" style="max-height:86dvh;overflow-y:auto;">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Radno vrijeme</div>
+    <div class="modal-sub">Vrsta lokala, poseban dan i iznimke po datumu</div>
+
+    <label class="form-label" style="margin-top:12px;">Vrsta lokala</label>
+    <div class="sm-mode-selector" id="wh-biztype-sel">
+      <button type="button" class="sm-mode-btn" data-biztype="coffee">Kafić</button>
+      <button type="button" class="sm-mode-btn" data-biztype="restaurant">Restoran</button>
+      <button type="button" class="sm-mode-btn" data-biztype="retail">Trgovina</button>
+    </div>
+
+    <label class="form-label" style="margin-top:12px;">Poseban dan</label>
+    <div class="sm-mode-selector" id="wh-weekday-sel" style="flex-wrap:wrap;gap:4px;"></div>
+
+    <label class="form-label" style="margin-top:12px;">Zadano za poseban dan</label>
+    <div class="sm-mode-selector" id="wh-mode-sel">
+      <button type="button" class="sm-mode-btn" data-mode="closed">Zatvoreno</button>
+      <button type="button" class="sm-mode-btn" data-mode="opening-only">Samo I. smjena</button>
+      <button type="button" class="sm-mode-btn" data-mode="full">Cijeli dan</button>
+    </div>
+
+    <label class="form-label" style="margin-top:12px;">Smjene koje lokal vodi</label>
+    <div class="sm-shifts-card" id="wh-shifts-card">
+      <div class="sm-shift-row"><label class="sm-shift-toggle-wrap"><input type="checkbox" class="wh-shift-check" data-shift="jutro"><div class="shift-card-icon jutro" style="width:24px;height:24px;font-size:11px;border-radius:6px;">I</div><span class="sm-shift-name">Jutro</span></label></div>
+      <div class="sm-shift-row"><label class="sm-shift-toggle-wrap"><input type="checkbox" class="wh-shift-check" data-shift="međusmjena"><div class="shift-card-icon međusmjena" style="width:24px;height:24px;font-size:11px;border-radius:6px;">II</div><span class="sm-shift-name">Međusmjena</span></label></div>
+      <div class="sm-shift-row"><label class="sm-shift-toggle-wrap"><input type="checkbox" class="wh-shift-check" data-shift="popodne"><div class="shift-card-icon popodne" style="width:24px;height:24px;font-size:11px;border-radius:6px;">III</div><span class="sm-shift-name">Popodne</span></label></div>
+    </div>
+
+    <label class="form-label" style="margin-top:12px;">Iznimke po datumu</label>
+    <div class="cal-nav">
+      <button class="cal-nav-btn" id="wh-cal-prev">‹</button>
+      <div class="cal-nav-title" id="wh-cal-month"></div>
+      <button class="cal-nav-btn" id="wh-cal-next">›</button>
+    </div>
+    <div class="calendar-grid" id="wh-calendar"></div>
+    <div style="font-size:11px;color:var(--text-3);padding:2px 4px 8px;">Dodirni datum za promjenu: cijeli dan → samo I → zatvoreno → zadano.</div>
+    <button class="btn-secondary" id="wh-close-month" style="font-size:12px;padding:8px 12px;margin-bottom:12px;"></button>
+
+    <button class="btn-primary" id="btn-save-work-hours">Spremi</button>
+    <button class="btn-secondary" id="btn-cancel-work-hours">Odustani</button>
   </div>
 </div>
 
@@ -1112,7 +1129,7 @@ import { isoDate, todayDate, getMonday, addDays, formatDate, dayOfWeek } from '.
 // The roster module owns the rules about who works what. Screens build one fresh
 // per render and ask it, instead of deriving eligibility by hand. See roster.js
 // and ADR-0001 (docs/adr/0001-opening-policy-precedence.md).
-import { createRoster, ALL_SHIFTS, OPENING_ONLY } from './roster.js';
+import { createRoster, ALL_SHIFTS, OPENING_CLOSED, OPENING_ONLY, OPENING_FULL } from './roster.js';
 
 // ══════════════════════════════════════════════════════════
 // SUPABASE INIT
@@ -1278,6 +1295,7 @@ let STATE = {
   activeTab: 'home',
   weekOffset: 0,
   dateSchedule: {},   // {iso: {waiterId: [shift,...]}}
+  businessConfig: null, // {type, specialWeekday, policy:{weekday,overrides}, enabledShifts} — cafes.business_config
 };
 
 // ══════════════════════════════════════════════════════════
@@ -1616,6 +1634,7 @@ async function enterOwnerApp(user) {
     return;
   }
   STATE.cafe = cafe;
+  STATE.businessConfig = normalizeBusinessConfig(cafe.business_config);
   STATE.owner = {
     name: user.user_metadata?.display_name || user.email.split('@')[0],
     phone: user.user_metadata?.phone || '',
@@ -1633,8 +1652,12 @@ async function enterOwnerApp(user) {
 async function enterWaiterApp(session) {
   // session = {id, name, cafe_id, color}
   STATE.cafe = {id: session.cafe_id, name: ''};
-  const { data: cafe } = await sb.from('cafes').select('name').eq('id', session.cafe_id).single();
+  // The waiter reads business_config alongside the name: their screens and the
+  // request screen need the opening policy and the enabled shifts to resolve the
+  // same roster the owner sees (ticket 09). Covered by cafes_waiter_read.
+  const { data: cafe } = await sb.from('cafes').select('name, business_config').eq('id', session.cafe_id).single();
   if (cafe) STATE.cafe.name = cafe.name;
+  STATE.businessConfig = normalizeBusinessConfig(cafe && cafe.business_config);
   // Load owner info from cafes.owner_id
   await loadAppData(session.cafe_id);
   // Find this waiter in STATE.waiters
@@ -2047,6 +2070,16 @@ async function handleAuthSubmit() {
 // ══════════════════════════════════════════════════════════
 // CAFE SETUP (first login)
 // ══════════════════════════════════════════════════════════
+// The business type chosen on the setup screen. It seeds the whole
+// business_config the café is created with (special weekday + default mode +
+// enabled shifts); the owner refines it later on the Radno vrijeme screen.
+let setupBusinessType = 'coffee';
+function setupBiztypeHint(type) {
+  const d = BUSINESS_TYPE_DEFAULTS[type] || BUSINESS_TYPE_DEFAULTS.coffee;
+  const el = document.getElementById('setup-biztype-hint');
+  if (el) el.textContent = `Poseban dan: ${DAY_LABELS_FULL[d.specialWeekday]} — ${OPENING_MODE_LABELS[d.mode]}. Kasnije promjenjivo.`;
+}
+
 async function handleCafeSetup() {
   const cafeName = document.getElementById('setup-cafe-name').value.trim();
   const ownerName = document.getElementById('setup-owner-name').value.trim();
@@ -2071,7 +2104,7 @@ async function handleCafeSetup() {
     }
 
     await sb.auth.updateUser({ data: { display_name: ownerName, phone: ownerPhone } });
-    const { data: cafe, error } = await sb.from('cafes').insert({ name: cafeName, owner_id: user.id }).select().single();
+    const { data: cafe, error } = await sb.from('cafes').insert({ name: cafeName, owner_id: user.id, business_config: businessConfigForType(setupBusinessType) }).select().single();
     if (error) {
       showToast('Greška: ' + (error.message || 'Nije moguće kreirati kafić.'));
       btn.disabled = false;
@@ -2325,6 +2358,7 @@ async function logout() {
   STATE.requests = [];
   STATE.dateSchedule = {};
   STATE.cafe = null;
+  STATE.businessConfig = null;
   showScreen('screen-login');
   const ws = wasOwner ? null : getWaiterSession();
   if (ws) setupWaiterLoginScreen(ws);
@@ -2379,27 +2413,92 @@ function currentWaiter() { return isOwner() ? null : STATE.currentUser; }
 
 // dayOfWeek maps Sunday to 6 (weeks start Monday at 0).
 const SUNDAY = 6;
+const MONDAY = 0;
 
-// The opening policy in force by default: Sunday — the special weekday — runs
-// opening-only (just the first shift), every other day runs full. This is where
-// the shiftmaker starts; per-date closures are a generation-time concern and are
-// not represented here.
-const SPECIAL_WEEKDAY_POLICY = { weekday: { [SUNDAY]: OPENING_ONLY } };
+// ── Business configuration ───────────────────────────────────────────────────
+//
+// The business type, the special weekday, the opening policy and the enabled
+// shifts, in roster-canonical vocabulary (see roster.js / CONTEXT.md). It is
+// persisted per café in cafes.business_config (migration 023) and loaded into
+// STATE at entry, so the owner's choices survive a reload and reach every screen.
+//
+// A business type seeds the special weekday AND its default mode at setup:
+//   coffee shop  → Sunday, opening-only     restaurant → Monday, closed
+//   retail store → Sunday, closed
+// All types start with every shift enabled and no per-date overrides; the owner
+// changes any of it afterwards on the Radno vrijeme settings screen.
+const BUSINESS_TYPE_DEFAULTS = {
+  coffee:     { specialWeekday: SUNDAY, mode: OPENING_ONLY },
+  restaurant: { specialWeekday: MONDAY, mode: OPENING_CLOSED },
+  retail:     { specialWeekday: SUNDAY, mode: OPENING_CLOSED },
+};
+const BUSINESS_TYPE_LABELS = { coffee: 'Kafić', restaurant: 'Restoran', retail: 'Trgovina' };
+const OPENING_MODE_LABELS = { [OPENING_CLOSED]: 'Zatvoreno', [OPENING_ONLY]: 'Samo I. smjena', [OPENING_FULL]: 'Cijeli dan' };
+
+// A full business_config for a type from its setup defaults. A `full` default
+// carries no weekday entry (the sparse map holds only non-full days), so the
+// specialWeekday scalar is what records which day the picker owns.
+function businessConfigForType(type) {
+  const known = BUSINESS_TYPE_DEFAULTS[type] ? type : 'coffee';
+  const d = BUSINESS_TYPE_DEFAULTS[known];
+  const weekday = d.mode === OPENING_FULL ? {} : { [d.specialWeekday]: d.mode };
+  return {
+    type: known,
+    specialWeekday: d.specialWeekday,
+    policy: { weekday, overrides: {} },
+    enabledShifts: ALL_SHIFTS.slice(),
+  };
+}
+
+// A café row's stored config, defended against an old or partial shape so the
+// roster always receives a well-formed policy. A row created before migration
+// 023, or a path that could not read the column, falls back to the coffee-shop
+// default (today's shipped behaviour).
+function normalizeBusinessConfig(raw) {
+  if (!raw || typeof raw !== 'object') return businessConfigForType('coffee');
+  const base = businessConfigForType('coffee');
+  const policy = raw.policy && typeof raw.policy === 'object' ? raw.policy : {};
+  const enabled = Array.isArray(raw.enabledShifts)
+    ? ALL_SHIFTS.filter(s => raw.enabledShifts.includes(s)) : [];
+  return {
+    type: BUSINESS_TYPE_DEFAULTS[raw.type] ? raw.type : 'coffee',
+    specialWeekday: Number.isInteger(raw.specialWeekday) ? raw.specialWeekday : base.specialWeekday,
+    policy: {
+      weekday: policy.weekday && typeof policy.weekday === 'object' ? { ...policy.weekday } : {},
+      overrides: policy.overrides && typeof policy.overrides === 'object' ? { ...policy.overrides } : {},
+    },
+    enabledShifts: enabled.length ? enabled : ALL_SHIFTS.slice(),
+  };
+}
+
+// The "full = no entry" resolution rule, in one place. roster.js owns it for the
+// live roster (openingMode); these pure forms are for the view code that must
+// resolve a policy object with no roster to ask — an unsaved settings draft, or
+// a read-only summary. A weekday the sparse map omits is a full day.
+function policyModeForDate(policy, iso) {
+  const o = policy.overrides || {};
+  if (o[iso] !== undefined) return o[iso];
+  return policyWeekdayMode(policy, dayOfWeek(iso));
+}
+function policyWeekdayMode(policy, dow) {
+  const w = policy.weekday || {};
+  return w[dow] !== undefined ? w[dow] : OPENING_FULL;
+}
 
 // A roster built from the current data snapshot, fresh on every call — there is
-// no cached instance. It carries the special-weekday opening policy, so the
-// screens see Sunday's opening-only rule. The waiter's own screens are
-// unaffected by that (mid and afternoon already have no Sunday pattern); the
-// request screen relies on it to stop offering a shift the business doesn't run.
-// The generated schedule is keyed by waiter id, holidays come off each waiter,
-// and the enabled shifts are the full three until the shift list is configurable.
+// no cached instance. It carries the café's stored opening policy and enabled
+// shifts (STATE.businessConfig, from cafes.business_config), so every screen
+// resolves the same policy the shiftmaker generated against and a day the owner
+// closes or fully opens takes effect at once (ADR-0001). The generated schedule
+// is keyed by waiter id and holidays come off each waiter.
 function buildRoster() {
+  const cfg = STATE.businessConfig || businessConfigForType('coffee');
   return createRoster({
     waiters: STATE.waiters,
     requests: STATE.requests,
     schedule: STATE.dateSchedule,
-    openingPolicy: SPECIAL_WEEKDAY_POLICY,
-    enabledShifts: ALL_SHIFTS,
+    openingPolicy: cfg.policy,
+    enabledShifts: cfg.enabledShifts,
   });
 }
 
@@ -3508,11 +3607,131 @@ async function saveOwnerProfile() {
 }
 
 // ══════════════════════════════════════════════════════════
+// RADNO VRIJEME (business config settings)
+// ══════════════════════════════════════════════════════════
+// Business type, special weekday, its default mode, enabled shifts and per-date
+// exceptions all live here and save on their own, independent of ever generating
+// a schedule (ticket 09). The shiftmaker and every display screen read what this
+// screen persists to cafes.business_config, so there is one opening policy, not
+// two. Editing works on a draft; Spremi writes it and the display honours it at
+// once (ADR-0001), without regenerating any schedule.
+let whDraft = null;
+let whCalDate = null;
+
+function whClone(cfg) {
+  return {
+    type: cfg.type,
+    specialWeekday: cfg.specialWeekday,
+    policy: {
+      weekday: { ...(cfg.policy.weekday || {}) },
+      overrides: { ...(cfg.policy.overrides || {}) },
+    },
+    enabledShifts: cfg.enabledShifts.slice(),
+  };
+}
+// The mode a date resolves to under the draft: override → weekday → full.
+function whModeForDate(iso) { return policyModeForDate(whDraft.policy, iso); }
+// The special weekday's default mode (full when the sparse map carries no entry).
+function whSpecialMode() { return policyWeekdayMode(whDraft.policy, whDraft.specialWeekday); }
+// Set the special weekday's default mode, keeping the map sparse (full = no
+// entry) and single-day (only the special weekday carries a default), so a
+// changed special day never leaves a stale weekday behind.
+function whSetSpecialMode(mode) {
+  const w = whDraft.policy.weekday;
+  Object.keys(w).forEach(k => delete w[k]);
+  if (mode !== OPENING_FULL) w[whDraft.specialWeekday] = mode;
+}
+// The override a tap moves a date to: default → full → opening-only → closed →
+// default (undefined removes the override). Matches the on-screen hint.
+function whNextOverride(cur) {
+  if (cur === undefined) return OPENING_FULL;
+  if (cur === OPENING_FULL) return OPENING_ONLY;
+  if (cur === OPENING_ONLY) return OPENING_CLOSED;
+  return undefined;
+}
+
+function openWorkHoursModal() {
+  whDraft = whClone(STATE.businessConfig || businessConfigForType('coffee'));
+  whCalDate = todayDate();
+  whRenderAll();
+  document.getElementById('modal-work-hours').classList.add('open');
+}
+function closeWorkHoursModal() { document.getElementById('modal-work-hours').classList.remove('open'); }
+
+function whRenderAll() {
+  document.querySelectorAll('#wh-biztype-sel .sm-mode-btn').forEach(b=>b.classList.toggle('active', b.dataset.biztype===whDraft.type));
+  whRenderWeekday();
+  document.querySelectorAll('#wh-mode-sel .sm-mode-btn').forEach(b=>b.classList.toggle('active', b.dataset.mode===whSpecialMode()));
+  document.querySelectorAll('.wh-shift-check').forEach(chk=>{ chk.checked = whDraft.enabledShifts.includes(chk.dataset.shift); });
+  whRenderCalendar();
+}
+function whRenderWeekday() {
+  const sel = document.getElementById('wh-weekday-sel');
+  sel.innerHTML = DAY_LABELS.map((l,dow)=>`<button type="button" class="sm-mode-btn${dow===whDraft.specialWeekday?' active':''}" data-weekday="${dow}" style="flex:0 0 auto;min-width:40px;">${l}</button>`).join('');
+  sel.querySelectorAll('.sm-mode-btn').forEach(b=>{
+    b.addEventListener('click',()=>{
+      const mode = whSpecialMode();              // carry the current default to the new day
+      whDraft.specialWeekday = parseInt(b.dataset.weekday);
+      whSetSpecialMode(mode);
+      whRenderAll();
+    });
+  });
+}
+function whRenderCalendar() {
+  const y = whCalDate.getFullYear(), m = whCalDate.getMonth();
+  document.getElementById('wh-cal-month').textContent = `${MONTH_NAMES[m]} ${y}`;
+  document.getElementById('wh-close-month').textContent = `Zatvori sve (${DAY_LABELS_FULL[whDraft.specialWeekday]}) ovaj mjesec`;
+  const cal = document.getElementById('wh-calendar');
+  const firstDay = new Date(y, m, 1);
+  const startDow = firstDay.getDay()===0 ? 6 : firstDay.getDay()-1;
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  const todayIso = today();
+  let html = '';
+  DAY_LABELS.forEach(l => { html += `<div class="cal-header">${l}</div>`; });
+  for (let i=0;i<startDow;i++) html += '<div class="cal-day empty"></div>';
+  for (let d=1; d<=daysInMonth; d++) {
+    const iso = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const mode = whModeForDate(iso);
+    const hasOverride = whDraft.policy.overrides[iso] !== undefined;
+    let cls = 'cal-day';
+    if (mode===OPENING_CLOSED) cls += ' wh-closed';
+    else if (mode===OPENING_ONLY) cls += ' wh-only';
+    if (hasOverride) cls += ' wh-override';
+    if (iso===todayIso) cls += ' today';
+    html += `<div class="${cls}" data-iso="${iso}">${d}</div>`;
+  }
+  cal.innerHTML = html;
+  cal.querySelectorAll('.cal-day:not(.empty)').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const iso = el.dataset.iso;
+      const next = whNextOverride(whDraft.policy.overrides[iso]);
+      if (next===undefined) delete whDraft.policy.overrides[iso];
+      else whDraft.policy.overrides[iso] = next;
+      whRenderCalendar();
+    });
+  });
+}
+async function saveWorkHours() {
+  if (!whDraft.enabledShifts.length) { showToast('Bar jedna smjena mora biti uključena'); return; }
+  const btn = document.getElementById('btn-save-work-hours');
+  btn.disabled = true;
+  const { error } = await sb.from('cafes').update({ business_config: whDraft }).eq('id', STATE.cafe.id);
+  btn.disabled = false;
+  if (error) { showToast('Greška pri spremanju.'); return; }
+  STATE.businessConfig = normalizeBusinessConfig(whDraft);
+  closeWorkHoursModal();
+  switchTab(STATE.activeTab);   // the display honours the new policy at once
+  showToast('Radno vrijeme spremljeno ✓');
+}
+
+// ══════════════════════════════════════════════════════════
 // SHIFTMAKER
 // ══════════════════════════════════════════════════════════
-let smShifts = {jutro:{enabled:true,min:2},međusmjena:{enabled:true,min:2},popodne:{enabled:true,min:2}};
-let smSundayDefault = 'morning';
-let smSundayOverrides = {};
+// Per-shift minimum staffing is the shiftmaker's own generation-run tuning and
+// stays here (min only). Which shifts the business runs, and the special-weekday
+// opening policy, are durable config now — the shiftmaker reads them from
+// STATE.businessConfig and no longer keeps its own throwaway Sunday state.
+let smShifts = {jutro:{min:2},međusmjena:{min:2},popodne:{min:2}};
 let smWeeks = 4;
 let smMode = 'weeks';
 let smMonthOffset = 1;
@@ -3525,65 +3744,36 @@ function smSyncMonthLabel() {
   document.getElementById('sm-month-val').textContent = `${MONTH_NAMES[t.getMonth()]} ${t.getFullYear()}`;
 }
 function smSyncModeUI() {
-  document.querySelectorAll('.sm-mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.smmode===smMode));
+  document.querySelectorAll('.sm-mode-btn[data-smmode]').forEach(b=>b.classList.toggle('active',b.dataset.smmode===smMode));
   document.getElementById('sm-weeks-row').style.display = smMode==='weeks'?'flex':'none';
   document.getElementById('sm-month-row').style.display = smMode==='month'?'flex':'none';
 }
-function smSundaySummaryText() {
-  const modes = Object.values(smSundayOverrides);
-  if (!modes.length) return smSundayDefault==='closed'?'Sve nedjelje zatvorene':smSundayDefault==='morning'?'Sve nedjelje — samo jutro':'Sve nedjelje — cijeli dan';
-  const labels = {closed:'Zatvoreno',morning:'samo jutro',full:'cijeli dan'};
-  const counts = {};
-  modes.forEach(m=>{counts[m]=(counts[m]||0)+1;});
-  return Object.entries(counts).map(([k,v])=>`${v}× ${labels[k]}`).join(', ')+' (iznimke)';
-}
-function smGetSundayRange() {
-  const now = todayDate();
-  let startDate, endDate;
-  if (smMode==='month') { startDate=new Date(now.getFullYear(),now.getMonth()+smMonthOffset,1); endDate=new Date(startDate.getFullYear(),startDate.getMonth()+1,0); }
-  else { startDate=getMonday(addDays(now,7)); endDate=addDays(startDate,smWeeks*7-1); }
-  const sundays = [];
-  let d = new Date(startDate);
-  while (d<=endDate) { if(d.getDay()===0) sundays.push(new Date(d)); d=addDays(d,1); }
-  return sundays;
-}
-function openSundaySettingsModal() {
-  const sundays = smGetSundayRange();
-  document.querySelectorAll('#sm-sunday-default-sel .sm-sunday-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===smSundayDefault));
-  const list = document.getElementById('sunday-list');
-  if (!sundays.length) { list.innerHTML='<div style="padding:12px 0;font-size:13px;color:var(--text-3);">Nema nedjelja u odabranom periodu.</div>'; }
-  else {
-    list.innerHTML = sundays.map(d => {
-      const iso = isoDate(d);
-      const cur = smSundayOverrides[iso]||null;
-      const label = `${d.getDate()}. ${MONTH_NAMES[d.getMonth()]}`;
-      return `<div class="sunday-item"><span class="sunday-item-date">${label}</span>
-        <div class="sunday-item-sel">
-          <button class="sunday-item-btn${cur==='closed'?' active':''}" data-iso="${iso}" data-mode="closed">Zatvoreno</button>
-          <button class="sunday-item-btn${(!cur||cur==='morning')?' active':''}" data-iso="${iso}" data-mode="morning">Samo I</button>
-          <button class="sunday-item-btn${cur==='full'?' active':''}" data-iso="${iso}" data-mode="full">Sve</button>
-        </div></div>`;
-    }).join('');
-    list.querySelectorAll('.sunday-item-btn').forEach(btn => {
-      btn.addEventListener('pointerdown', () => {
-        smSundayOverrides[btn.dataset.iso] = btn.dataset.mode;
-        btn.closest('.sunday-item').querySelectorAll('.sunday-item-btn').forEach(b=>b.classList.toggle('active',b===btn));
-      });
-    });
-  }
-  document.getElementById('modal-sunday-settings').classList.add('open');
+// A read-only summary of the persisted opening policy, so the owner sees what the
+// generator will assign against without a second control here. Editing lives in
+// Postavke → Radno vrijeme.
+function smPolicyNoteText() {
+  const cfg = STATE.businessConfig || businessConfigForType('coffee');
+  const dayName = DAY_LABELS_FULL[cfg.specialWeekday];
+  const mode = policyWeekdayMode(cfg.policy, cfg.specialWeekday);
+  const enabled = cfg.enabledShifts.map(s=>s==='jutro'?'I':s==='međusmjena'?'II':'III').join('·');
+  const nOv = Object.keys(cfg.policy.overrides||{}).length;
+  let t = `Poseban dan: ${dayName} — ${OPENING_MODE_LABELS[mode]}. Smjene: ${enabled}.`;
+  if (nOv) t += ` ${nOv}× iznimka po datumu.`;
+  t += ' Uredi u Postavke → Radno vrijeme.';
+  return t;
 }
 function openShiftmakerModal() {
-  smShifts={jutro:{enabled:true,min:2},međusmjena:{enabled:true,min:2},popodne:{enabled:true,min:2}};
-  smSundayDefault='morning'; smSundayOverrides={}; smWeeks=4; smMode='weeks'; smMonthOffset=1; smDays={}; smPrefs={};
+  const cfg = STATE.businessConfig || businessConfigForType('coffee');
+  smShifts={jutro:{min:2},međusmjena:{min:2},popodne:{min:2}};
+  smWeeks=4; smMode='weeks'; smMonthOffset=1; smDays={}; smPrefs={};
   STATE.waiters.forEach(w=>{smDays[w.id]=6;smPrefs[w.id]='auto';});
+  // Only the enabled shifts get a min stepper; a disabled shift's row is hidden.
   ALL_SHIFTS.forEach(s=>{
     document.getElementById(`sm-min-${s}`).textContent=smShifts[s].min;
-    const chk=document.querySelector(`.sm-shift-check[data-shift="${s}"]`); if(chk) chk.checked=true;
-    document.getElementById(`sm-row-${s}`).classList.remove('sm-disabled');
+    document.getElementById(`sm-row-${s}`).style.display = cfg.enabledShifts.includes(s) ? '' : 'none';
   });
   document.getElementById('sm-weeks-val').textContent=smWeeks;
-  document.getElementById('sm-sunday-summary').textContent=smSundaySummaryText();
+  document.getElementById('sm-policy-note').textContent=smPolicyNoteText();
   smSyncModeUI(); smSyncMonthLabel();
   document.getElementById('sm-notify-section').style.display='none';
   renderSmWaiterList();
@@ -3641,9 +3831,13 @@ function assignShiftsForDay(workers, shiftsThisDay, waiterPref) {
 }
 
 async function generateSchedule() {
-  const enabledShifts = ALL_SHIFTS.filter(s=>smShifts[s].enabled);
-  // The roster answers only the holiday question here; the generator keeps its
-  // own generation-time Sunday policy (ADR-0001 says that stays out of the roster).
+  // The enabled shifts and the opening policy are the persisted config now, not
+  // generator-local state. The generator asks the roster which shifts each date
+  // runs (roster.runningShifts), so it assigns staff against exactly the policy
+  // every display screen reads back — one source of truth, not two.
+  const cfg = STATE.businessConfig || businessConfigForType('coffee');
+  const enabledShifts = cfg.enabledShifts;
+  const specialWeekday = cfg.specialWeekday; // dow index, Sunday = 6
   const roster = buildRoster();
   const now = todayDate();
   let startDate, endDate;
@@ -3670,22 +3864,24 @@ async function generateSchedule() {
     const weekAssignments={};
     STATE.waiters.forEach(w=>{
       const days=smDays[w.id]||0;
-      const available=[0,1,2,3,4,5].filter(dow2=>{const dd=addDays(weekStart,dow2);return !roster.onHoliday(w,isoDate(dd));}).sort(()=>Math.random()-0.5);
+      // The waiter's ordinary working days are the six non-special weekdays; the
+      // special weekday is added only for someone working every day, and only if
+      // the roster runs that day at all (a closed special day is never staffed).
+      const regularDows=[0,1,2,3,4,5,6].filter(d=>d!==specialWeekday);
+      const available=regularDows.filter(dow2=>{const dd=addDays(weekStart,dow2);return !roster.onHoliday(w,isoDate(dd));}).sort(()=>Math.random()-0.5);
       const assigned=new Set(available.slice(0,Math.min(days,available.length)));
-      const sunIso=isoDate(addDays(weekStart,6));
-      if ((smSundayOverrides[sunIso]||smSundayDefault)!=='closed'&&days>6&&!roster.onHoliday(w,sunIso)) assigned.add(6);
+      const swIso=isoDate(addDays(weekStart,specialWeekday));
+      if (roster.runningShifts(swIso).length>0&&days>6&&!roster.onHoliday(w,swIso)) assigned.add(specialWeekday);
       weekAssignments[w.id]=assigned;
     });
     for (let dow=0;dow<7;dow++) {
       const d=addDays(weekStart,dow);
       if (d<startDate||d>endDate) continue;
       const iso2=isoDate(d);
-      const isSun=dow===6;
-      const sundayMode=smSundayOverrides[iso2]||smSundayDefault;
-      if (isSun&&sundayMode==='closed') continue;
-      // A morning-only Sunday runs just the first enabled shift — the same
-      // opening-only rule the roster applies (roster.js runningShifts, OPENING_ONLY).
-      const shiftsThisDay=isSun&&sundayMode==='morning'?enabledShifts.slice(0,1):enabledShifts;
+      // Which shifts run this date is the roster's answer, resolving the persisted
+      // opening policy (closed → none, opening-only → first enabled, full → all).
+      const shiftsThisDay=roster.runningShifts(iso2);
+      if (!shiftsThisDay.length) continue; // closed: no rows generated
       let workers=STATE.waiters.filter(w=>weekAssignments[w.id].has(dow));
       const minNeeded=shiftsThisDay.reduce((s,sh)=>s+smShifts[sh].min,0);
       if (workers.length<minNeeded) {
@@ -3796,6 +3992,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Cafe setup
   document.getElementById('btn-setup-save').addEventListener('click', handleCafeSetup);
+  document.querySelectorAll('#setup-biztype-sel .sm-mode-btn').forEach(b=>{
+    b.addEventListener('click',()=>{
+      setupBusinessType=b.dataset.biztype;
+      document.querySelectorAll('#setup-biztype-sel .sm-mode-btn').forEach(x=>x.classList.toggle('active',x===b));
+      setupBiztypeHint(setupBusinessType);
+    });
+  });
+  setupBiztypeHint(setupBusinessType);
 
   // Logout buttons
   ['logout-btn','logout-btn-swaps','logout-btn-week','logout-btn-month','logout-btn-admin','admin-logout']
@@ -3857,14 +4061,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('sm-weeks-inc').addEventListener('click', ()=>{smWeeks=Math.min(12,smWeeks+1);document.getElementById('sm-weeks-val').textContent=smWeeks;});
   document.getElementById('sm-month-dec').addEventListener('click', ()=>{smMonthOffset=Math.max(1,smMonthOffset-1);smSyncMonthLabel();});
   document.getElementById('sm-month-inc').addEventListener('click', ()=>{smMonthOffset=Math.min(6,smMonthOffset+1);smSyncMonthLabel();});
-  document.querySelectorAll('.sm-mode-btn').forEach(b=>b.addEventListener('click',()=>{smMode=b.dataset.smmode;smSyncModeUI();}));
-  document.querySelectorAll('.sm-shift-check').forEach(chk=>{
-    chk.addEventListener('change',()=>{
-      const s=chk.dataset.shift;
-      smShifts[s].enabled=chk.checked;
-      document.getElementById(`sm-row-${s}`).classList.toggle('sm-disabled',!chk.checked);
-    });
-  });
+  document.querySelectorAll('.sm-mode-btn[data-smmode]').forEach(b=>b.addEventListener('click',()=>{smMode=b.dataset.smmode;smSyncModeUI();}));
   document.querySelectorAll('.sm-shift-dec,.sm-shift-inc').forEach(btn=>{
     btn.addEventListener('click',()=>{
       const s=btn.dataset.shift, delta=btn.classList.contains('sm-shift-inc')?1:-1;
@@ -3872,16 +4069,50 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.getElementById(`sm-min-${s}`).textContent=smShifts[s].min;
     });
   });
-  document.getElementById('btn-open-sunday-settings').addEventListener('click', openSundaySettingsModal);
-  document.getElementById('btn-sunday-done').addEventListener('click', ()=>{
-    document.getElementById('sm-sunday-summary').textContent=smSundaySummaryText();
-    document.getElementById('modal-sunday-settings').classList.remove('open');
-  });
-  document.querySelectorAll('#sm-sunday-default-sel .sm-sunday-btn').forEach(b=>{
-    b.addEventListener('pointerdown',()=>{
-      smSundayDefault=b.dataset.mode;
-      document.querySelectorAll('#sm-sunday-default-sel .sm-sunday-btn').forEach(x=>x.classList.toggle('active',x===b));
+
+  // Radno vrijeme (business config settings)
+  document.getElementById('btn-work-hours').addEventListener('click', openWorkHoursModal);
+  document.getElementById('btn-cancel-work-hours').addEventListener('click', closeWorkHoursModal);
+  document.getElementById('btn-save-work-hours').addEventListener('click', saveWorkHours);
+  document.querySelectorAll('#wh-biztype-sel .sm-mode-btn').forEach(b=>{
+    b.addEventListener('click',()=>{
+      const type=b.dataset.biztype;
+      whDraft.type=type;
+      document.querySelectorAll('#wh-biztype-sel .sm-mode-btn').forEach(x=>x.classList.toggle('active',x===b));
+      const d=BUSINESS_TYPE_DEFAULTS[type];
+      // Changing the type offers to re-apply its default weekday + mode; the
+      // owner confirms. Date-keyed exceptions are left intact either way.
+      if (confirm(`Primijeni zadano za "${BUSINESS_TYPE_LABELS[type]}"?\nPoseban dan: ${DAY_LABELS_FULL[d.specialWeekday]} — ${OPENING_MODE_LABELS[d.mode]}.\nIznimke po datumu ostaju.`)) {
+        whDraft.specialWeekday=d.specialWeekday;
+        whSetSpecialMode(d.mode);
+      }
+      whRenderAll();
     });
+  });
+  document.querySelectorAll('#wh-mode-sel .sm-mode-btn').forEach(b=>{
+    b.addEventListener('click',()=>{
+      whSetSpecialMode(b.dataset.mode);
+      document.querySelectorAll('#wh-mode-sel .sm-mode-btn').forEach(x=>x.classList.toggle('active',x===b));
+      whRenderCalendar();
+    });
+  });
+  document.querySelectorAll('.wh-shift-check').forEach(chk=>{
+    chk.addEventListener('change',()=>{
+      const chosen=ALL_SHIFTS.filter(s=>document.querySelector(`.wh-shift-check[data-shift="${s}"]`).checked);
+      if (!chosen.length) { chk.checked=true; showToast('Bar jedna smjena mora biti uključena'); return; }
+      whDraft.enabledShifts=chosen;
+    });
+  });
+  document.getElementById('wh-cal-prev').addEventListener('click', ()=>{whCalDate=new Date(whCalDate.getFullYear(),whCalDate.getMonth()-1,1);whRenderCalendar();});
+  document.getElementById('wh-cal-next').addEventListener('click', ()=>{whCalDate=new Date(whCalDate.getFullYear(),whCalDate.getMonth()+1,1);whRenderCalendar();});
+  document.getElementById('wh-close-month').addEventListener('click', ()=>{
+    const y=whCalDate.getFullYear(), m=whCalDate.getMonth();
+    const daysInMonth=new Date(y,m+1,0).getDate();
+    for (let d=1;d<=daysInMonth;d++){
+      const iso=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      if (dayOfWeek(iso)===whDraft.specialWeekday) whDraft.policy.overrides[iso]=OPENING_CLOSED;
+    }
+    whRenderCalendar();
   });
 
   // Owner profile
@@ -3910,7 +4141,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('ob-skip').addEventListener('click', closeOnboarding);
 
   // Close modals on overlay click
-  ['modal-request','modal-day-detail','modal-owner-profile','modal-sunday-settings'].forEach(id=>{
+  ['modal-request','modal-day-detail','modal-owner-profile','modal-work-hours'].forEach(id=>{
     const overlay=document.getElementById(id);
     if (!overlay) return;
     overlay.addEventListener('click', e=>{if(e.target===overlay) overlay.classList.remove('open');});
