@@ -1,7 +1,7 @@
 **Edits:**
 - Mouseover info for link, edit and delete in Admin Panel! Questionable since it's a mobile APP primarily?
 - Shift pattern when adding a new team member needs to be simplified - for example only first shift, only second shift, only middle shift or "no conditions"
-- Invite login screen needs modifications, it's not scaling properly (SS attached). In the example given, we need to reduce the size of numpad (approximately 15%), increase the size of Štacija (to match "Postavi 4-znamenkasti PIN..:") (what ever is the name of the business) - all this needs to fit one screen on all browsers. After the installation is done, screen format is perfect (SS attached). Do you need additional infor in regards to the prompt/task?
+- Invite login screen needs modifications, it's not scaling properly. Reduce the size of the numpad (approximately 15%), increase the size of Štacija (to match "Postavi 4-znamenkasti PIN..:") (whatever is the name of the business) - all this needs to fit one screen on all browsers. After the installation is done, the screen format is perfect, so the installed rendering is the reference for what correct looks like. **Screenshots to be taken during implementation** - none exist yet; the agent can also open the app headless and check the rendering directly at the target viewports. Open question for triage: which browsers/phones count as the target (iOS Safari and its collapsing toolbar is the one that usually breaks "fits one screen").
 - Add "Zahtjev za GO"
 - Create accounting export file, monthly timesheets - these need to be adopted to Croatian accounting standards.
 - Login errors - note and screen shake?
