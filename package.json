@@ -1,9 +1,0 @@
-{
-  "name": "osmica",
-  "private": true,
-  "type": "module",
-  "description": "Static PWA — no build step, no runtime dependencies. This manifest exists only so Node reads the app's .js modules as ES modules and so the test suite runs with one command.",
-  "scripts": {
-    "test": "node --test"
-  }
-}

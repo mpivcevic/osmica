@@ -1,6 +1,8 @@
-// The repository's first test suite. Run it with one command and no install:
+// The repository's first test suite. Run it with one command and no install,
+// and with no package manifest: Node (>= 22.7) detects the ES-module syntax in
+// these plain .js files on its own.
 //
-//     node --test        (or: npm test)
+//     node --test
 //
 // It exercises the roster through its constructor and its questions — never its
 // internals, never the DOM, never UI copy. Where a test is only about how the
