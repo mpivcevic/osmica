@@ -50,6 +50,24 @@ This is a **public** repository. Do not commit descriptions of live, exploitable
 
 See **`AGENTS.md`** for the installed skills, the issue tracker (markdown under `.scratch/<feature-slug>/`, gitignored — issues stay out of the public repo), the triage-label vocabulary, and the domain-doc layout. Keep `CONTEXT.md` the single source of truth for domain language; record hard-to-reverse decisions as ADRs under `docs/adr/`.
 
+## Development workflow
+
+The installed engineering skills (from `mattpocock/skills`; see `AGENTS.md`) form one route from idea to shipped code. **`/ask-matt`** is the live router — reach for it when unsure which skill fits. The shape:
+
+- **Shape the idea** with `/grill-with-docs`: a stateful interview that sharpens intent and leaves a paper trail in `CONTEXT.md` and ADRs. When a question needs a runnable answer, detour through `/prototype`.
+- **Plan a multi-session build** with `/to-spec`, then `/to-tickets` (tracer-bullet tickets under `.scratch/<feature-slug>/`). For a single-session change, skip straight to `/implement`.
+- **Build** with `/implement`: it drives `/tdd` one red-green slice at a time and closes with `/code-review` before committing. Keep grill → spec → tickets in one context window; start each `/implement` fresh.
+
+On-ramps that merge into that flow:
+
+- Incoming bugs or feature requests you did **not** author → `/triage`.
+- Something broken → `/diagnosing-bugs` (it builds a red feedback loop first, then fixes with a regression test).
+- A large, foggy effort too big for one session → `/wayfinder` (charts decision tickets until the path is clear, then hands off to `/to-spec`).
+
+Running underneath: `/domain-modeling` keeps `CONTEXT.md` a clean glossary, and `/codebase-design` is the deep-module vocabulary for shaping modules — the discipline behind the `roster.js` / `dates.js` extraction out of `osmica.html`.
+
+Note: the gstack skills (`/office-hours`, `/spec`, `/plan-*`, `/ship`, `/qa`, `/review`) cover overlapping ground and are also installed; pick whichever flow fits the task.
+
 ## Working with the maintainer
 
 - Respond in English (the domain and some docs are in Croatian; replies are not).
