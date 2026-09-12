@@ -38,7 +38,7 @@ SQL lives in `supabase/migrations/` (production) and `supabase/migrations/dev/` 
 
 ## Security disclosure
 
-This is a **public** repository. Do not commit descriptions of live, exploitable vulnerabilities. Fix the issue first (migration + client change), then describe it in the changelog once it is closed. Security planning docs live at `osmica_security_plan.md` and `osmica_stage_c_plan.md`.
+This is a **public** repository. Do not commit descriptions of live, exploitable vulnerabilities. Fix the issue first (migration + client change), then describe it in the changelog once it is closed. Security planning docs are kept out of this public repo, in gitignored `.scratch/security/`.
 
 ## Releasing
 
