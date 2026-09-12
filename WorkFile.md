@@ -1,97 +1,121 @@
-**Edits:**
-- Mouseover info for link, edit and delete in Admin Panel! Questionable since it's a mobile APP primarily?
-- Shift pattern when adding a new team member needs to be simplified - for example only first shift, only second shift, only middle shift or "no conditions"
-- Invite login screen needs modifications, it's not scaling properly. Reduce the size of the numpad (approximately 15%), increase the size of Štacija (to match "Postavi 4-znamenkasti PIN..:") (whatever is the name of the business) - all this needs to fit one screen on all browsers. After the installation is done, the screen format is perfect, so the installed rendering is the reference for what correct looks like. **Screenshots to be taken during implementation** - none exist yet; the agent can also open the app headless and check the rendering directly at the target viewports. Open question for triage: which browsers/phones count as the target (iOS Safari and its collapsing toolbar is the one that usually breaks "fits one screen").
-- Add "Zahtjev za GO"
-- Create accounting export file, monthly timesheets - these need to be adopted to Croatian accounting standards.
-- Login errors - note and screen shake?
-- Remember e-mail option for owners, ideally connected to the phone.
-- Add phonebook access for inviting members, ideally adding multiple of them at the same time
-- Add types of employees, for example we start with Student and Regular. This should be the option inside Admin panel, when creating the new employee and something we can change as the time goes on, for those who move from Student to Regular for example. This will mostly be for big retailers like Tommy, Interspar and similar.
-- Think about visual tour at first application start-up, how well can it be done and does it make sense?
-- When the waiter loses connection to the APP for whatever reason (clearing cache, replacing a phone or something third) change the status in owners ADMIN panel. Think of claver ways to present it, we might need to send a notification when it happens?
-- Think about implementing part-time people, someone that works for a different coffee shop and would like to cover a shift in his/hers free time. This might be something worth developing, something like a licitation for workhours.
+# WorkFile — Osmica backlog
 
+Working backlog, grouped by kind. Within each group, items run roughly
+most-worth-doing first. Items marked _(added — vet)_ are suggestions, not yours.
 
+## Functionality
 
+- **Simplify new-member shift pattern** — when adding a team member, offer only
+  first shift / second shift / middle shift / "no conditions" instead of the
+  current fuller picker.
+- **Add "Zahtjev za GO"** — a day-off request action.
+- **Waiter-disconnect detection** — when a waiter loses the app (cleared cache,
+  new phone, etc.), reflect the changed status in the owner Admin panel. Find a
+  clear way to present it; a notification when it happens may be worth it.
+- **Employee types (Student / Regular)** — set on create in the Admin panel,
+  changeable later as someone moves Student → Regular. Mainly for big retailers
+  (Tommy, Interspar).
+- **Phonebook access for invites** — invite members from the phone's contacts,
+  ideally adding several at once.
+- **Per-person phone numbers before first 💬** — every production row carries the
+  builder's own number today, so every invite message would be addressed to him.
+  Must land before anyone presses the WhatsApp action. _(moved from Stage E carve-out)_
+- **Remember owner e-mail** — a remember-me option for owners, ideally tied to the
+  phone.
+- **Accounting export** — monthly timesheets as an export file, adapted to Croatian
+  accounting standards.
+- **Login errors** — surface them (inline note + screen shake?).
+- **Rename request tabs?** — Otvorene / Moje / Pokrivene: should "Pokrivene" become
+  odobrene/odbijene (approved/rejected)? NB: `CONTEXT.md` defines **Coverage
+  (Pokrivene)** as "who actually works a shift," not a request status — that is
+  **Standing** (`approved` / etc.). Resolve the naming in `CONTEXT.md` first.
+- **Part-time / cross-shop shift "licitation"** (exploratory) — let someone who
+  works for another shop cover a free shift; a marketplace/auction for work hours.
 
+## Visual / UX
 
+- **Invite/login screen scaling** — not scaling properly. Reduce the numpad by
+  ~15%, enlarge "Štacija" (the business name) to match the "Postavi 4-znamenkasti
+  PIN…" line; the whole screen must fit on one screen in all browsers.
+    - The **installed** rendering is the reference for "correct" — it looks perfect
+      after install. Take screenshots during implementation (none exist yet); the
+      agent can also open the app headless and check rendering at the target
+      viewports. Open triage question: which browsers/phones are the target?
+      (iOS Safari's collapsing toolbar is what usually breaks "fits one screen".)
+- **First-run visual tour** — evaluate feasibility and whether it makes sense.
+- **Admin-panel mouseover info** — tooltips for link / edit / delete. Questionable,
+  since this is primarily a mobile app.
 
+## Reliability & offline
 
-> **Reclassified 24 Aug 2026, when Stage E was paused.** These were found while
-> testing Stage C and carried through Stage D untouched. Two of the three are
-> **not security work and should be fixed in the functionality push**: the
-> `getSession()` timeout and the offline shell are both user-facing failures a
-> barista will meet before any attacker does. The third — session / lock policy —
-> stays with Stage E, because deciding how long an owner session lives is a
-> security decision. See the Stage E block at the bottom of this file.
+These are product bugs, not security items (reclassified 24 Aug 2026 out of the
+security stages).
 
-- Session / lock policy — the reload and re-entry flow needs designing properly. Today the only thing resembling a timer is a staleness reload (osmica.html:3909): tab hidden >= 15 min, then made visible again -> `location.reload()`. It was never meant as security, but it lands very differently per role. A waiter hits the keypad on every `init()`, so ANY reload is a PIN prompt -> they have a de-facto 15-minute auto-lock. The owner is dropped straight back in with nothing asked -> no session expiry at all (Supabase rotates the refresh token in localStorage indefinitely; only an explicit logout ends it). Decide deliberately: how long should an owner session live, should a waiter's PIN be asked on every open or only after N minutes idle, and should "unsaved text in a visible input" (the current reload guard) also block a lock. Safe but not annoying — the failure mode to avoid is a barista typing their PIN four times before service at 6am.
-- `getSession()` has no timeout guard (osmica.html:1509, also :1768 and :4017). When Supabase Auth is slow or down, `init()` waits forever and the app sits on the loading spinner with no message and no way out. Confirmed by the 23 Aug 2026 outage: prod GoTrue was answering in 45–82s against 0.5s on dev, and the app was unusable while the database was perfectly healthy. Wrap it in a `Promise.race` timeout so an auth stall degrades to the login screen with a "check your connection" message. Note that v4.42's offline fallback (the `if (!ok)` branch that unlocks from a cached identity) is unreachable code until this exists, because the call above it never settles.
-- No offline shell — the app cannot be cold-opened without a network at all. `sw.js` serves HTML network-only (`e.respondWith(fetch(e.request))`, no `.catch()`), so in airplane mode the reload gets the browser's error page and `init()` never runs. This undercuts v4.42's own reasoning: its offline branch exists because "a local PIN that stops working the moment the wifi does would defeat the point of moving it onto the device" — but that branch is only reachable when the site loads and Supabase does not (the 23 Aug outage), never on a genuinely offline open. For a PWA with a manifest and an install prompt, a barista in a basement with no signal gets nothing. Fix is a cached HTML fallback in the service worker, which has to be weighed against the reason it is network-only today: guaranteeing a fresh version on every open.
+- **`getSession()` timeout guard** — when Supabase Auth is slow or down, `init()`
+  waits forever and the app sits on the spinner with no message and no way out.
+  Wrap it in a `Promise.race` timeout so an auth stall degrades to the login screen
+  with a "check your connection" message.
+    - `osmica.html:1509` (also `:1768`, `:4017`). Confirmed by the 23 Aug 2026
+      outage: prod GoTrue answered in 45–82s vs 0.5s on dev while the DB was
+      healthy. v4.42's offline fallback (the `if (!ok)` branch) is unreachable code
+      until this exists, because the call above it never settles.
+- **Offline shell** — the app cannot be cold-opened with no network. `sw.js` serves
+  HTML network-only (`e.respondWith(fetch(e.request))`, no `.catch()`), so in
+  airplane mode the reload gets the browser error page and `init()` never runs. Add
+  a cached HTML fallback in the service worker.
+    - Undercuts v4.42's own reasoning (a local PIN that dies with the wifi defeats
+      the point). Weigh against why it's network-only today: guaranteeing a fresh
+      version on every open.
 
+## Security — Stage E (paused; see Reference)
 
-Orvorene/Moje/Pokrivene - Pokrivene bi trebalo imenovati kao odobrene/odbijene???
-Check 7shifts, Homebase and Deputy for ideas!
+Nothing here is an active exposure — that is what made pausing reasonable. Resumes
+after the functionality and design work.
 
-"C:\Program Files (x86)\cloudflared\cloudflared.exe" tunnel --url http://localhost:5500
+- **Session / lock policy** — design the reload and re-entry flow deliberately: how
+  long an owner session should live, whether a waiter's PIN is asked on every open
+  or only after N minutes idle, and whether unsaved text in a visible input should
+  block a lock. Safe but not annoying — avoid a barista typing the PIN four times
+  before service at 6am.
+    - `osmica.html:3909` staleness reload (tab hidden ≥ 15 min → `location.reload()`)
+      is the only timer-like thing, and lands very differently per role: a waiter
+      gets a de-facto 15-min auto-lock; the owner has no session expiry at all.
+- **TOTP + new-device email** for the owner.
+- **Single-use expiring invite tokens** — cheaper to build after the invite UX
+  (phonebook access, bulk invites) settles.
+- **Drop `phone`** — depends on what the WhatsApp flow becomes.
+- **Re-probe both projects after functionality lands** — new features re-open old
+  holes. Run `supabase/migrations/README.md` § "Verifying anything" against prod and
+  dev. Expected: `401` on every table/column, `200` on `claim_invite` as the control.
 
-Waiter status check (activated/linked)
-select name,
-       joined_at    is not null as activated,
-       auth_user_id is not null as linked
-from public.waiters order by name;
+## Data & privacy
 
+- **Written backup/restore procedure** — there is no backup story written down
+  anywhere; losing the schedule and request history to a bad migration would hurt
+  Štacija more than anything the security stages closed.
+- **Retention policy** — what happens to an employee's rows when they leave. Once
+  real staff use this it stores names, phone numbers and working patterns of EU
+  employees. Decide before the first real roster, not after.
 
----
+## Codebase & docs
 
-## Stage E — PAUSED 24 Aug 2026
+- **Headless screenshot harness for visual QA** — a repeatable way to capture the
+  target viewports for the invite/login scaling work and future visual fixes.
+- **Continue extracting logic from `osmica.html` behind tests** — the `roster.js` /
+  `dates.js` split is the pattern; keep peeling testable logic out of the single
+  file.
 
-Stages A–D are complete on both projects and **nothing in Stage E is an active
-exposure** — that is what made pausing it reasonable. The app has no real users,
-no real data, and the owner password currently guards seven test rows. What
-blocks Štacija from actually using this is everything else in this file.
+## Reference & notes
 
-Stage E resumes after the functionality and design work. It is four separable
-projects, not one stage: TOTP + new-device email for the owner; single-use
-expiring invite tokens; dropping `phone`; and the session / lock policy above.
-Design is in `osmica_security_plan.md` § Stage E; the state everything reached is
-in `TaskList_2026-08-24.md`.
-
-Two of them are **cheaper after** the product settles, which is a reason to wait
-rather than an excuse: dropping `phone` depends on what the WhatsApp flow
-becomes, and single-use invite tokens depend on the invite UX — phonebook access
-and bulk invites are both on the list above. Building them now means building
-them twice.
-
-### The three carve-outs — things the pause must NOT defer
-
-1. **The `getSession()` timeout and the offline shell move into the
-   functionality push.** They are product bugs, not security items. An auth
-   stall today is an infinite spinner with no message and no way out — that is
-   exactly what the 23–24 Aug Supabase slowness looked like — and a PWA with an
-   install prompt that cannot be cold-opened without signal fails the person it
-   was installed for. Both are described in full above.
-
-2. **Two things are triggered by real staff arriving, not by a stage.**
-   - **Per-person phone numbers, before anyone presses 💬.** Every production row
-     carries the builder's own number today, so every invite message would be
-     addressed to him.
-   - **Retention: what happens to an employee's rows when they leave.** Once real
-     staff use this, it stores names, phone numbers and working patterns of
-     employees in the EU. That is a decision to take before the first real
-     roster, not after.
-
-3. **Re-probe after the functionality work lands.** New features re-open old
-   holes; `015` sat inert on dev for three days while its browser tests passed
-   for the wrong reason (README trap 9). Run the loop in
-   `supabase/migrations/README.md` § "Verifying anything" against **both**
-   projects. Expected everywhere: `401` on every table and column, `200` on
-   `claim_invite` as the control. It takes a minute.
-
-### One thing that was never in any stage, and is a bigger practical risk
-
-**There is no backup story written down anywhere.** Losing the schedule and
-request history to a bad migration would hurt Štacija more than anything Stages
-A–D closed. Not security work, not Stage E — but it belongs on a list, and this
-is the list.
+- **cloudflared tunnel:**
+  `"C:\Program Files (x86)\cloudflared\cloudflared.exe" tunnel --url http://localhost:5500`
+- **Waiter status check (activated / linked):**
+  ```sql
+  select name,
+         joined_at    is not null as activated,
+         auth_user_id is not null as linked
+  from public.waiters order by name;
+  ```
+- **Competitor scan** — check 7shifts, Homebase and Deputy for ideas.
+- **Stage E detail** — design in `osmica_security_plan.md` § Stage E; the state
+  everything reached is in `TaskList_2026-08-24.md`.
