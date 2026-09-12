@@ -67,26 +67,9 @@ security stages).
       the point). Weigh against why it's network-only today: guaranteeing a fresh
       version on every open.
 
-## Security — Stage E (paused; see Reference)
+## Security
 
-Nothing here is an active exposure — that is what made pausing reasonable. Resumes
-after the functionality and design work.
-
-- **Session / lock policy** — design the reload and re-entry flow deliberately: how
-  long an owner session should live, whether a waiter's PIN is asked on every open
-  or only after N minutes idle, and whether unsaved text in a visible input should
-  block a lock. Safe but not annoying — avoid a barista typing the PIN four times
-  before service at 6am.
-    - `osmica.html:3909` staleness reload (tab hidden ≥ 15 min → `location.reload()`)
-      is the only timer-like thing, and lands very differently per role: a waiter
-      gets a de-facto 15-min auto-lock; the owner has no session expiry at all.
-- **TOTP + new-device email** for the owner.
-- **Single-use expiring invite tokens** — cheaper to build after the invite UX
-  (phonebook access, bulk invites) settles.
-- **Drop `phone`** — depends on what the WhatsApp flow becomes.
-- **Re-probe both projects after functionality lands** — new features re-open old
-  holes. Run `supabase/migrations/README.md` § "Verifying anything" against prod and
-  dev. Expected: `401` on every table/column, `200` on `claim_invite` as the control.
+_Tracked privately — see `.scratch/security/` (gitignored), kept out of this public repo._
 
 ## Data & privacy
 
@@ -117,5 +100,3 @@ after the functionality and design work.
   from public.waiters order by name;
   ```
 - **Competitor scan** — check 7shifts, Homebase and Deputy for ideas.
-- **Stage E detail** — design in `osmica_security_plan.md` § Stage E; the state
-  everything reached is in `TaskList_2026-08-24.md`.
