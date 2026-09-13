@@ -51,21 +51,29 @@ most-worth-doing first. Items marked _(added — vet)_ are suggestions, not your
 These are product bugs, not security items (reclassified 24 Aug 2026 out of the
 security stages).
 
-- **`getSession()` timeout guard** — when Supabase Auth is slow or down, `init()`
-  waits forever and the app sits on the spinner with no message and no way out.
-  Wrap it in a `Promise.race` timeout so an auth stall degrades to the login screen
-  with a "check your connection" message.
-    - `osmica.html:1509` (also `:1768`, `:4017`). Confirmed by the 23 Aug 2026
-      outage: prod GoTrue answered in 45–82s vs 0.5s on dev while the DB was
-      healthy. v4.42's offline fallback (the `if (!ok)` branch) is unreachable code
-      until this exists, because the call above it never settles.
-- **Offline shell** — the app cannot be cold-opened with no network. `sw.js` serves
-  HTML network-only (`e.respondWith(fetch(e.request))`, no `.catch()`), so in
-  airplane mode the reload gets the browser error page and `init()` never runs. Add
-  a cached HTML fallback in the service worker.
-    - Undercuts v4.42's own reasoning (a local PIN that dies with the wifi defeats
-      the point). Weigh against why it's network-only today: guaranteeing a fresh
-      version on every open.
+- **`getSession()` timeout guard** — SHIPPED 13 Sep 2026 (Build 4.48, commit
+  `a83d1ae`). `init()` no longer waits forever on `getSession()` when auth stalls
+  (23 Aug outage: GoTrue 45–82s vs 0.5s healthy): a 5s `Promise.race` on init's
+  call only degrades to one retry screen with a 3-state adaptive message (offline
+  / server-timeout / error) + Retry button. The v4.42 local-unlock `if (!ok)`
+  branch is removed — waiter and owner both land on the same screen. New pure
+  helpers live in `authstatus.js` (+ `authstatus.test.js`, node --test).
+    - Decision record: `docs/adr/0002-fail-auth-to-retry-screen.md`. Task list:
+      `.scratch/reliability-auth-timeout/tasklist.md`.
+    - ⚠️ **Not yet verified in a running browser** — Slice 3 (live DevTools
+      checks) was NOT done. Still to confirm on localhost (DEV pill): offline
+      state (Network → Offline, reload) shows offline text + Retry; timeout state
+      (block the GoTrue URL or throttle >5s) shows the server-not-responding text
+      after ~5s + Retry; Retry reloads and recovers once the block is removed;
+      happy path still routes owner/waiter well under 5s.
+    - Follow-up ticket (not done): guard the invite-claim `getSession()`
+      (`osmica.html:1800`) with its own invite-screen timeout message.
+- **Offline shell** — DEFERRED 13 Sep 2026. Once local unlock was killed, a
+  standalone offline shell only swaps the browser error page for a branded "you're
+  offline" screen — polish, not function — and adds risk to the "fresh version on
+  every open" guarantee (`sw.js` is deliberately network-only for HTML/JS). Real
+  value needs cached roster data too. Revisit as **shell + cached reads** only if
+  "see my schedule with no signal" becomes a genuine need.
 
 ## Security
 
@@ -92,6 +100,7 @@ _Tracked privately — see `.scratch/security/` (gitignored), kept out of this p
 
 - **cloudflared tunnel:**
   `"C:\Program Files (x86)\cloudflared\cloudflared.exe" tunnel --url http://localhost:5500`
+
 - **Waiter status check (activated / linked):**
   ```sql
   select name,
@@ -99,4 +108,5 @@ _Tracked privately — see `.scratch/security/` (gitignored), kept out of this p
          auth_user_id is not null as linked
   from public.waiters order by name;
   ```
+  
 - **Competitor scan** — check 7shifts, Homebase and Deputy for ideas.
