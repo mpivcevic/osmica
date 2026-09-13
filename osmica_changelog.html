@@ -1455,6 +1455,17 @@
       body: "Mistype your owner email or password, or enter a wrong PIN while joining from an invite link, and the screen now gives the same brief shake the staff PIN login has always used — alongside the error message — so a rejected attempt is unmistakable. Correct logins behave exactly as before.",
       why: "The staff PIN screen shook on a wrong entry, but the owner login and the invite PIN screen only showed a line of text, which is easy to miss on a phone during a busy moment. Now all three sign-in screens fail the same way.",
       date: "13 Sep 2026"
+    },
+    {
+      id: "build-4-48-auth-timeout",
+      phase: "build",
+      version: "Build 4.48",
+      versionDate: "13 Sep 2026",
+      tag: "fix",
+      title: "Opening the app can no longer hang forever when the server is slow",
+      body: "When you open the app it first checks who you are, which needs the server. If the server was slow-but-alive — as during the 23 Aug outage, when it answered after 45–80 seconds instead of half a second — the app used to sit on the loading spinner with no message and no way out. Now that check gives up after 5 seconds and shows a clear screen with a Retry button instead. The message adapts to what went wrong: no internet connection, the server not responding, or a general connection problem — so you know whether to check your Wi-Fi or just wait a moment and try again.",
+      why: "The old code had no time limit on that first check, so a slow server meant an infinite spinner. It also had a fallback that let staff unlock the app locally when the network was unreachable, but with no offline data or saved requests that only dropped them into a blank app where every action failed and was lost. Both are replaced by one honest screen: any failure to sign in lands on the same clear message plus Retry, for staff and owner alike. See ADR-0002.",
+      date: "13 Sep 2026"
     }
   ];
   </script>

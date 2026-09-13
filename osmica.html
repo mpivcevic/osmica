@@ -555,7 +555,7 @@ details[open] .hours-chevron::before{content:'▴';}
 <div id="screen-login" class="screen">
   <div class="login-logo"><svg class="brand-mark" aria-hidden="true" focusable="false"><use href="#logo-mark"/></svg><span>Osmica</span></div>
   <p class="login-tagline">Tvoje smjene, tvoja pravila.</p>
-  <p style="font-size:10px;color:var(--text-3);margin-top:-24px;margin-bottom:clamp(14px,2.5dvh,24px);">v4.47</p>
+  <p style="font-size:10px;color:var(--text-3);margin-top:-24px;margin-bottom:clamp(14px,2.5dvh,24px);">v4.48</p>
   <!-- waiter session: show name + PIN keypad -->
   <div id="login-waiter-section" style="display:none;width:100%;flex-direction:column;align-items:center;">
     <div class="login-name-display">
@@ -591,6 +591,9 @@ details[open] .hours-chevron::before{content:'▴';}
   <div id="login-no-session-section" style="display:none;flex-direction:column;align-items:center;width:100%;">
     <div class="login-no-session">
       <p>Nisi još aktiviran/a.<br>Zatraži pozivnicu od vlasnika kafića.</p>
+      <!-- Shown only for connectivity failures (showConnectionError); the
+           product-state messages (never invited, device released) hide it. -->
+      <button class="btn-primary" id="login-retry-btn" style="display:none;">Pokušaj ponovo</button>
     </div>
   </div>
   <!-- owner link always shown at bottom -->
@@ -1130,6 +1133,9 @@ import { isoDate, todayDate, getMonday, addDays, formatDate, dayOfWeek } from '.
 // per render and ask it, instead of deriving eligibility by hand. See roster.js
 // and ADR-0001 (docs/adr/0001-opening-policy-precedence.md).
 import { createRoster, ALL_SHIFTS, OPENING_CLOSED, OPENING_ONLY, OPENING_FULL } from './roster.js';
+// Auth-failure helpers: a timeout guard around getSession() and the message for
+// the single retry screen. See authstatus.js and ADR-0002.
+import { withTimeout, authFailureMessage } from './authstatus.js';
 
 // ══════════════════════════════════════════════════════════
 // SUPABASE INIT
@@ -1533,7 +1539,18 @@ async function init() {
   }
 
   // 3. Owner session (Supabase Auth)
-  const { data: { session } } = await sb.auth.getSession();
+  // getSession() awaits Supabase's internal auth init, which makes a network
+  // round-trip. When the auth server is slow-but-alive (the 23 Aug 2026 outage:
+  // GoTrue answering in 45–82s) this never settled and the app hung on the bare
+  // spinner. Race it against a 5s deadline and degrade to the retry screen
+  // instead of hanging. See ADR-0002.
+  const TIMED_OUT = Symbol('auth-timeout');
+  const sessionRes = await withTimeout(sb.auth.getSession(), 5000, TIMED_OUT);
+  if (sessionRes === TIMED_OUT) {
+    showConnectionError(authFailureMessage({ online: navigator.onLine, cause: 'timeout' }));
+    return;
+  }
+  const { data: { session } } = sessionRes;
   // getSession() awaits Supabase's internal init sequence, which is also what
   // fires PASSWORD_RECOVERY — so by now that event (and its screen-show) has
   // already happened if this was a recovery link. Supabase can strip the
@@ -1570,16 +1587,14 @@ async function init() {
       return;
     }
     if (!ok) {
-      // The lookup failed rather than answered. getSession() reads local
-      // storage, so we got this far with no network at all — and a local PIN
-      // that stops working the moment the wifi does would defeat the point of
-      // moving it onto the device. Fall back to the last known identity and
-      // unlock locally. The app itself will still need the network to load the
-      // roster; what must not happen here is signing the session out.
-      const cached = getWaiterSession();
-      showScreen('screen-login');
-      if (cached) setupWaiterLoginScreen(cached);
-      else setupLoginNoSession('Nema veze s poslužiteljem.<br>Provjeri internet pa pokušaj ponovo.');
+      // The lookup failed rather than answered. v4.42 fell back here to a local
+      // PIN unlock, but that dropped the waiter into a blank app where every
+      // write fails and is lost (no offline shell, no cached roster, no write
+      // queue). ADR-0002 reverses that: a failed sign-in is one retry screen for
+      // everyone. navigator.onLine === false here still yields the offline
+      // message — correct, since getSession() reads local storage and we can get
+      // this far with no network.
+      showConnectionError(authFailureMessage({ online: navigator.onLine, cause: 'error' }));
       return;
     }
     // Asked and answered: a live anonymous session bound to no waiter row. The
@@ -1744,8 +1759,27 @@ function setupLoginNoSession(msg) {
   document.getElementById('login-waiter-section').style.display = 'none';
   document.getElementById('login-no-session-section').style.display = 'flex';
   setLoginInstruction('');
+  // Product-state messages (never invited, device released) carry no retry —
+  // only showConnectionError() reveals the button. Reset it here so those
+  // callers never inherit a stray one.
+  const retry = document.getElementById('login-retry-btn');
+  if (retry) { retry.style.display = 'none'; retry.onclick = null; }
   const p = document.querySelector('#login-no-session-section .login-no-session p');
   if (p) p.innerHTML = msg || 'Nisi još aktiviran/a.<br>Zatraži pozivnicu od vlasnika kafića.';
+}
+
+// The single retry screen for every failed sign-in (ADR-0002): the adaptive
+// connectivity message plus a Retry button that just reloads. Reuses the
+// no-session section rather than adding a screen, and reveals the button that
+// setupLoginNoSession keeps hidden for product states.
+function showConnectionError(msgHtml) {
+  showScreen('screen-login');
+  setupLoginNoSession(msgHtml);
+  const retry = document.getElementById('login-retry-btn');
+  if (retry) {
+    retry.style.display = '';
+    retry.onclick = () => location.reload();
+  }
 }
 
 // v4.42 removed setupPinOnlyScreen()/handlePinOnlyKey() and pinFailureMessage().
