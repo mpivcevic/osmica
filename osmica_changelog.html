@@ -1444,6 +1444,17 @@
       body: "Setting up a café now asks what kind of place it is — coffee shop, restaurant or shop — and picks a sensible special day for you: Sunday for a coffee shop, Monday for a restaurant, Sunday for a shop. And there is a new screen, Radno vrijeme, under the Admin settings, where you decide the rest: which day is your special day, whether it is closed, open for the first shift only, or open all day, which shifts you run at all, and — on a calendar — any single date you want to close or open as an exception, with one tap to close every special day in a month. The important part is what happens after you save: every screen obeys your choice at once. Close a day and nobody shows as working it; open a day fully and every shift appears — with no need to generate the schedule again. Nothing changes for existing cafés: they stay a coffee shop whose Sundays open for the morning only, exactly as before.",
       why: "Until now the app quietly assumed a coffee shop whose only special day was Sunday, open for the morning, and the one place you could touch that was buried inside the schedule generator — where the choice was thrown away the moment you closed the window. Worse, a Sunday you had generated as a full day still showed as morning-only on every screen, and a day you wanted closed could only be done by regenerating. Giving the setting a real home fixes both: a restaurant's Monday or a shop's closed-by-default Sunday now fits, and changing your mind about a single day takes effect the instant you save it.",
       date: "8 Sep 2026"
+    },
+    {
+      id: "build-4-47-auth-shake",
+      phase: "build",
+      version: "Build 4.47",
+      versionDate: "13 Sep 2026",
+      tag: "ui",
+      title: "A wrong password or invite PIN now shakes the screen, like the staff login already did",
+      body: "Mistype your owner email or password, or enter a wrong PIN while joining from an invite link, and the screen now gives the same brief shake the staff PIN login has always used — alongside the error message — so a rejected attempt is unmistakable. Correct logins behave exactly as before.",
+      why: "The staff PIN screen shook on a wrong entry, but the owner login and the invite PIN screen only showed a line of text, which is easy to miss on a phone during a busy moment. Now all three sign-in screens fail the same way.",
+      date: "13 Sep 2026"
     }
   ];
   </script>

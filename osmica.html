@@ -555,7 +555,7 @@ details[open] .hours-chevron::before{content:'▴';}
 <div id="screen-login" class="screen">
   <div class="login-logo"><svg class="brand-mark" aria-hidden="true" focusable="false"><use href="#logo-mark"/></svg><span>Osmica</span></div>
   <p class="login-tagline">Tvoje smjene, tvoja pravila.</p>
-  <p style="font-size:10px;color:var(--text-3);margin-top:-24px;margin-bottom:clamp(14px,2.5dvh,24px);">v4.46</p>
+  <p style="font-size:10px;color:var(--text-3);margin-top:-24px;margin-bottom:clamp(14px,2.5dvh,24px);">v4.47</p>
   <!-- waiter session: show name + PIN keypad -->
   <div id="login-waiter-section" style="display:none;width:100%;flex-direction:column;align-items:center;">
     <div class="login-name-display">
@@ -1895,6 +1895,18 @@ function failLoginPin(msg) {
   document.getElementById('login-error').textContent = msg;
 }
 
+// Briefly shake an element to signal a rejected credential, mirroring the PIN-dot
+// shake in failLoginPin so every auth screen fails the same way. Reading
+// offsetWidth forces a reflow, which restarts the animation when the same element
+// is shaken twice in a row (adding an already-present class would not re-trigger).
+function shakeElement(el) {
+  if (!el) return;
+  el.classList.remove('shake');
+  void el.offsetWidth;
+  el.classList.add('shake');
+  setTimeout(() => el.classList.remove('shake'), 400);
+}
+
 async function handleLoginKey(k) {
   if (_loginVerifying) return;
   const err = document.getElementById('login-error');
@@ -2035,7 +2047,8 @@ async function handleAuthSubmit() {
   const password = document.getElementById('auth-password').value;
   const errEl = document.getElementById('auth-error');
   const btn = document.getElementById('btn-auth-submit');
-  if (!email || !password) { errEl.textContent = 'Upiši email i lozinku.'; return; }
+  const card = document.querySelector('#screen-owner-auth .auth-card');
+  if (!email || !password) { errEl.textContent = 'Upiši email i lozinku.'; shakeElement(card); return; }
   btn.disabled = true;
   btn.textContent = '...';
   errEl.textContent = '';
@@ -2043,6 +2056,7 @@ async function handleAuthSubmit() {
     const { data, error } = await sb.auth.signInWithPassword({email, password});
     if (error) {
       errEl.textContent = 'Pogrešan email ili lozinka.';
+      shakeElement(card);
       btn.disabled = false;
       btn.textContent = 'Prijavi se';
       return;
@@ -2052,6 +2066,7 @@ async function handleAuthSubmit() {
     const { data, error } = await sb.auth.signUp({email, password});
     if (error) {
       errEl.textContent = error.message || 'Greška pri registraciji.';
+      shakeElement(card);
       btn.disabled = false;
       btn.textContent = 'Registriraj se';
       return;
@@ -2334,6 +2349,7 @@ async function handleInviteKey(k) {
         const d = document.getElementById(`inv-dot-${i}`);
         if (d) d.classList.add('error');
       }
+      shakeElement(document.getElementById('invite-pin-dots'));
       setTimeout(() => { _invitePinBuf = ''; renderInviteDots([]); }, 400);
       err.textContent = 'Pogrešan PIN.';
     }
