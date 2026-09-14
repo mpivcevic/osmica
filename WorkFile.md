@@ -73,8 +73,18 @@ security stages).
     - Static wiring re-checked 14 Sep 2026 (headless `$B`, localhost DEV): the
       `authstatus.js` import resolves, `init()` runs with zero console errors,
       happy path routes to `screen-login` (green DEV pill + v4.48 label).
-    - Follow-up ticket (not done): guard the invite-claim `getSession()`
-      (`osmica.html:1800`) with its own invite-screen timeout message.
+    - Follow-up carried to its own item below: guard the invite-claim
+      `getSession()`.
+- **Invite-claim `getSession()` timeout guard** — follow-up to Build 4.48. The
+  init-path `getSession()` is now raced against a 5s deadline (`authstatus.js`
+  `withTimeout`), but the invite-claim path is not: `linkWaiterIdentity()` at
+  `osmica.html:1834` still does a bare `await sb.auth.getSession()` before the
+  anonymous sign-in. On the same slow-GoTrue outage a waiter opening an invite
+  link would hang with no message. Apply the same `withTimeout` + `TIMED_OUT`
+  sentinel and surface an invite-screen timeout message (its own copy — the
+  invite flow has no retry screen yet, so decide: reuse the `authstatus.js`
+  wording or a lighter inline note). Low priority: needs a slow auth server
+  *and* a waiter mid-invite; the app already retries the anonymous sign-in once.
 - **Offline shell** — DEFERRED 13 Sep 2026. Once local unlock was killed, a
   standalone offline shell only swaps the browser error page for a branded "you're
   offline" screen — polish, not function — and adds risk to the "fresh version on
