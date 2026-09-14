@@ -60,12 +60,19 @@ security stages).
   helpers live in `authstatus.js` (+ `authstatus.test.js`, node --test).
     - Decision record: `docs/adr/0002-fail-auth-to-retry-screen.md`. Task list:
       `.scratch/reliability-auth-timeout/tasklist.md`.
-    - ⚠️ **Not yet verified in a running browser** — Slice 3 (live DevTools
-      checks) was NOT done. Still to confirm on localhost (DEV pill): offline
-      state (Network → Offline, reload) shows offline text + Retry; timeout state
-      (block the GoTrue URL or throttle >5s) shows the server-not-responding text
-      after ~5s + Retry; Retry reloads and recovers once the block is removed;
-      happy path still routes owner/waiter well under 5s.
+    - ✅ **Verified end-to-end in a real browser** (DevTools network throttling,
+      reproducing the 23 Aug GoTrue outage). Two-number proof came from an
+      in-page diagnostic, since reverted — `osmica.html` is back to committed
+      4.48: `getSession settled in 1 ms; timedOut = false` on a valid cached
+      session → app loads instantly (happy path safe); `getSession settled in
+      5001 ms; timedOut = true` on an expired token + slow GoTrue → the race
+      fires at exactly 5s → retry screen. Retry (unthrottle → "Pokušaj ponovo")
+      reloads and re-runs the guard; with the server still unreachable it
+      correctly re-showed the "Poslužitelj trenutačno ne odgovara" timeout
+      message, and a full reload against a valid session lands in the app.
+    - Static wiring re-checked 14 Sep 2026 (headless `$B`, localhost DEV): the
+      `authstatus.js` import resolves, `init()` runs with zero console errors,
+      happy path routes to `screen-login` (green DEV pill + v4.48 label).
     - Follow-up ticket (not done): guard the invite-claim `getSession()`
       (`osmica.html:1800`) with its own invite-screen timeout message.
 - **Offline shell** — DEFERRED 13 Sep 2026. Once local unlock was killed, a
