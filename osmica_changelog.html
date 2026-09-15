@@ -1466,6 +1466,17 @@
       body: "When you open the app it first checks who you are, which needs the server. If the server was slow-but-alive — as during the 23 Aug outage, when it answered after 45–80 seconds instead of half a second — the app used to sit on the loading spinner with no message and no way out. Now that check gives up after 5 seconds and shows a clear screen with a Retry button instead. The message adapts to what went wrong: no internet connection, the server not responding, or a general connection problem — so you know whether to check your Wi-Fi or just wait a moment and try again.",
       why: "The old code had no time limit on that first check, so a slow server meant an infinite spinner. It also had a fallback that let staff unlock the app locally when the network was unreachable, but with no offline data or saved requests that only dropped them into a blank app where every action failed and was lost. Both are replaced by one honest screen: any failure to sign in lands on the same clear message plus Retry, for staff and owner alike. See ADR-0002.",
       date: "13 Sep 2026"
+    },
+    {
+      id: "plan-2-backup-restore",
+      phase: "plan",
+      version: "Plan 2",
+      versionDate: "15 Sep 2026",
+      tag: "decision",
+      title: "Database backups — and a restore drill that has actually been rehearsed",
+      body: "There was no way to bring back the schedule and shift-request history if a change to the database went wrong. Now, before every such change, the four production tables are dumped to a single file kept in OneDrive — off the database itself, so the copy survives even the whole project being lost. The recovery steps were rehearsed end to end on the test database — wiped, then restored to identical contents — so the procedure is known to work, not merely written down. The full setup, including staff phone numbers and names, stays only in that private OneDrive folder.",
+      why: "The production database is changed by hand, one pasted script at a time, with nothing between a wrong paste and lost data — and losing the roster and request history would hurt more than anything the security work closed. This closes that gap before real staff data arrives. Recorded in ADR-0003 with a step-by-step runbook.",
+      date: "15 Sep 2026"
     }
   ];
   </script>

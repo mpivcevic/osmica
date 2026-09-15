@@ -98,12 +98,22 @@ _Tracked privately — see `.scratch/security/` (gitignored), kept out of this p
 
 ## Data & privacy
 
-- **Written backup/restore procedure** — there is no backup story written down
-  anywhere; losing the schedule and request history to a bad migration would hurt
-  Štacija more than anything the security stages closed.
+- **Written backup/restore procedure** — DONE & VERIFIED 15 Sep 2026.
+  Decision in `docs/adr/0003-backup-restore-strategy.md`; step-by-step in
+  `docs/backup-restore.md`. Maintainer-run data-only dump of the four production
+  tables (identities skipped) via native `pg_dump` into the OneDrive folder
+  `osmica-backups/` (`osmica-backup.sh`), before every migration; dev is the
+  restore-rehearsal target. Set up on WSL and proven end-to-end: a production dump
+  (`osmica-prod-2026-09-15.sql`, 4 tables) and a full wipe-and-restore rehearsal on
+  dev returning identical row counts. **Deferred triggers (at first real café):**
+  a weekly scheduled dump + ~90-day retention pruning (the latter handed to the
+  Retention-policy item below).
 - **Retention policy** — what happens to an employee's rows when they leave. Once
   real staff use this it stores names, phone numbers and working patterns of EU
-  employees. Decide before the first real roster, not after.
+  employees. Decide before the first real roster, not after. **Trigger now wired:**
+  the backup runbook (`docs/backup-restore.md` → Retention & GDPR) defers bounded
+  (~90-day) pruning of the PII-bearing dump files to this item, to fire the day
+  the first real café goes live — resolve the exact window and legal basis here.
 
 ## Codebase & docs
 

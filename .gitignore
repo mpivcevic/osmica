@@ -8,3 +8,6 @@
 
 # Local issue tracker — issues stay out of the public repo
 .scratch/
+
+# Supabase CLI scratch (created by `npx supabase …` during backups)
+supabase/.temp/
